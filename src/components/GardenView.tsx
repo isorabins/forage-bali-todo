@@ -194,8 +194,9 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
   const [tooltip,    setTooltip]     = useState<TooltipData | null>(null)
   const [hoveredMs,  setHoveredMs]   = useState<number | null>(null)
 
-  const springRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const playRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const springRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const playRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isPlayingRef = useRef(false)
 
   // ── Week stats ───────────────────────────────────────────────────────────────
   const weekStats = useMemo(() => {
@@ -256,26 +257,39 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
 
   // ── Play / Reset ──────────────────────────────────────────────────────────────
   const handlePlay = () => {
-    if (isPlaying) {
+    if (isPlayingRef.current) {
+      // Stop — cancel pending step, snap back immediately
+      isPlayingRef.current = false
       if (playRef.current) clearTimeout(playRef.current)
       setIsPlaying(false)
       triggerSpringBack()
       return
     }
+
+    // Start
     if (springRef.current) clearTimeout(springRef.current)
+    isPlayingRef.current = true
     setIsPlaying(true)
     setPreviewWeek(1)
+
     let wk = 1
-    const advance = () => {
+    const step = () => {
       wk++
-      if (wk > 12) { setIsPlaying(false); triggerSpringBack(); return }
       setPreviewWeek(wk)
-      playRef.current = setTimeout(advance, 800)
+      if (wk < 12 && isPlayingRef.current) {
+        playRef.current = setTimeout(step, 800)
+      } else {
+        // Reached week 12 (or was stopped) — wait 1 s then spring back
+        isPlayingRef.current = false
+        setIsPlaying(false)
+        setTimeout(() => triggerSpringBack(), 1000)
+      }
     }
-    playRef.current = setTimeout(advance, 800)
+    playRef.current = setTimeout(step, 800)
   }
 
   const handleReset = () => {
+    isPlayingRef.current = false
     if (playRef.current)   clearTimeout(playRef.current)
     if (springRef.current) clearTimeout(springRef.current)
     setIsPlaying(false)
@@ -620,7 +634,7 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
         {/* Buttons */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 6 }}>
           <button className={`scrub-btn${isPlaying ? ' playing' : ''}`} onClick={handlePlay}>
-            {isPlaying ? '⏸ Pause' : '▶ Play'}
+            {isPlaying ? '■ Stop' : '▶ Play'}
           </button>
           <button className="scrub-btn" onClick={handleReset}>⏮ Reset</button>
         </div>
