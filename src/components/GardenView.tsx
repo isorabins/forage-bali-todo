@@ -62,8 +62,12 @@ function generateTree(
       : (i - 1) * spreadBase
     const newAngle = angle + angleOffset + (rand.next() * 10 - 5)
     const newLength = length * (0.6 + rand.next() * 0.1)
-    const newWeek = weekIndex + Math.floor(12 / Math.pow(2, 8 - depth))
-    generateTree(x2, y2, newAngle, newLength, depth - 1, Math.min(newWeek, 12), branches, rand)
+    // Map depth linearly: depth 9 = week 1, depth 1 = week 12
+    const childDepth = depth - 1
+    const newWeek = childDepth === 0
+      ? 12
+      : Math.max(1, Math.min(12, Math.round(1 + 11 * (1 - (childDepth - 1) / 8))))
+    generateTree(x2, y2, newAngle, newLength, childDepth, newWeek, branches, rand)
   }
 }
 
