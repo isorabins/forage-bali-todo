@@ -130,7 +130,6 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
 
   // ── Milestone bloom: radial glow from center when at a milestone week ─────────
   const isMilestone = MILESTONE_WEEKS.has(displayWeek)
-  const bloomOpacity = isMilestone ? 0.18 : 0
 
   const currentDateRange = WEEK_DATES[`Week ${displayWeek}`] || ''
   const currentWeekStats = weekStats[`Week ${displayWeek}`] || { done: 0, total: 0 }
