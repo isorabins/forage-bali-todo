@@ -7,56 +7,23 @@ interface Props {
   onOwnerWeekFilter: (owner: string, week: string) => void
 }
 
-interface WeekNode {
-  week: string
-  weekNum: number
-  total: number
-  done: number
+// ── Constants ─────────────────────────────────────────────────────────────────
+const STEM_X = 110          // x of the vertical stem within each tree SVG
+const SVG_W = 220           // width of each tree's SVG
+const TOP_PAD = 70          // space above first branch (for owner label + progress bar)
+const BOTTOM_PAD = 36       // space below last branch (for root dot)
+const BRANCH_LEN = 80       // horizontal line length from stem to card
+const CARD_W = 90           // card width
+const CARD_H = 44           // card height
+const CARD_RX = 8           // card border radius
+const WEEK_COUNT = 12
+
+// Dynamic SVG height based on number of weeks
+function svgHeight(weekCount: number) {
+  return TOP_PAD + (weekCount - 1) * 46 + CARD_H + BOTTOM_PAD + 20
 }
 
-interface OwnerBranch {
-  owner: string
-  nodes: WeekNode[]
-  // cubic bezier control points
-  p0: { x: number; y: number }
-  p1: { x: number; y: number }
-  p2: { x: number; y: number }
-  p3: { x: number; y: number }
-  labelOffset: { x: number; y: number }
-}
-
-// ── Bezier helpers ──────────────────────────────────────────────────────────
-function bezierPoint(
-  t: number,
-  p0: { x: number; y: number },
-  p1: { x: number; y: number },
-  p2: { x: number; y: number },
-  p3: { x: number; y: number },
-) {
-  const mt = 1 - t
-  return {
-    x: mt * mt * mt * p0.x + 3 * mt * mt * t * p1.x + 3 * mt * t * t * p2.x + t * t * t * p3.x,
-    y: mt * mt * mt * p0.y + 3 * mt * mt * t * p1.y + 3 * mt * t * t * p2.y + t * t * t * p3.y,
-  }
-}
-
-function bezierPathD(
-  p0: { x: number; y: number },
-  p1: { x: number; y: number },
-  p2: { x: number; y: number },
-  p3: { x: number; y: number },
-) {
-  return `M ${p0.x} ${p0.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${p3.x} ${p3.y}`
-}
-
-// Evenly spread t values 0..1 for n nodes, starting slightly off 0 and 1
-function spreadT(n: number): number[] {
-  if (n === 0) return []
-  if (n === 1) return [0.45]
-  return Array.from({ length: n }, (_, i) => 0.12 + (i / (n - 1)) * 0.78)
-}
-
-// ── Leaf generation (seeded, stable) ────────────────────────────────────────
+// ── Seeded random (stable) ────────────────────────────────────────────────────
 function seededRand(seed: number) {
   let s = seed
   return () => {
@@ -65,88 +32,327 @@ function seededRand(seed: number) {
   }
 }
 
-function generateLeaves(
-  p0: { x: number; y: number },
-  p1: { x: number; y: number },
-  p2: { x: number; y: number },
-  p3: { x: number; y: number },
+// ── Leaf generation along branch line ────────────────────────────────────────
+function generateBranchLeaves(
+  x1: number, y1: number,
+  x2: number, y2: number,
   count: number,
   seed: number,
 ) {
   const rand = seededRand(seed)
   return Array.from({ length: count }, (_, i) => {
-    const t = 0.05 + rand() * 0.9
-    const pt = bezierPoint(t, p0, p1, p2, p3)
-    const angle = -60 + rand() * 120
+    const t = 0.15 + (i / (count - 1 || 1)) * 0.65 + (rand() - 0.5) * 0.08
+    const lx = x1 + (x2 - x1) * t
+    const ly = y1 + (y2 - y1) * t
+    const angle = -50 + rand() * 100
     const rx = 5 + rand() * 4
     const ry = 2.5 + rand() * 2
-    const side = rand() > 0.5 ? 1 : -1
-    // offset perpendicular to branch direction
-    const dt = bezierPoint(Math.min(t + 0.01, 1), p0, p1, p2, p3)
-    const dx = dt.x - pt.x
-    const dy = dt.y - pt.y
-    const len = Math.sqrt(dx * dx + dy * dy) || 1
-    const perp = { x: -dy / len, y: dx / len }
-    const offset = (8 + rand() * 10) * side
-    return {
-      key: i,
-      cx: pt.x + perp.x * offset,
-      cy: pt.y + perp.y * offset,
-      rx,
-      ry,
-      angle,
-    }
+    const perpY = (rand() - 0.5) * 14
+    return { key: i, cx: lx, cy: ly + perpY, rx, ry, angle }
   })
 }
 
-// ── Node styles ──────────────────────────────────────────────────────────────
-function getNodeStyle(done: number, total: number) {
-  if (total === 0) return { fill: 'transparent', stroke: '#bfa88a', strokeWidth: 1.5 }
-  const pct = done / total
-  if (pct === 0) return { fill: 'transparent', stroke: '#bfa88a', strokeWidth: 1.5 }
-  if (pct >= 1) return { fill: '#5a6847', stroke: 'none', strokeWidth: 0 }
-  // growing: partial fill indicated by gradient-ish color
-  const r = Math.round(0xd4 + (0x5a - 0xd4) * pct)
-  const g = Math.round(0xc5 + (0x68 - 0xc5) * pct)
-  const b = Math.round(0xb0 + (0x47 - 0xb0) * pct)
-  const hex = '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
-  return { fill: hex, stroke: '#5a6847', strokeWidth: 1.2 }
+// ── Mini progress arc (pie slice using SVG path) ──────────────────────────────
+function MiniProgressCircle({ pct, r, cx, cy }: { pct: number; r: number; cx: number; cy: number }) {
+  const full = pct >= 1
+  const empty = pct <= 0
+
+  if (full) {
+    return <circle cx={cx} cy={cy} r={r} fill="#5a6847" />
+  }
+  if (empty) {
+    return <circle cx={cx} cy={cy} r={r} fill="#e6ddd0" stroke="#bfa88a" strokeWidth={1} />
+  }
+
+  // Pie slice arc
+  const angle = pct * 2 * Math.PI - Math.PI / 2
+  const x = cx + r * Math.cos(angle)
+  const y = cy + r * Math.sin(angle)
+  const largeArc = pct > 0.5 ? 1 : 0
+
+  // Start from top (12 o'clock)
+  const startX = cx
+  const startY = cy - r
+
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={r} fill="#e6ddd0" stroke="#bfa88a" strokeWidth={1} />
+      <path
+        d={`M ${cx} ${cy} L ${startX} ${startY} A ${r} ${r} 0 ${largeArc} 1 ${x} ${y} Z`}
+        fill="#5a6847"
+      />
+    </g>
+  )
 }
 
-// 4-petal flower path centered at (cx,cy) with size s
-function flowerPath(cx: number, cy: number, s: number) {
-  const d = s * 0.55
-  return [
-    `M ${cx} ${cy}`,
-    `C ${cx - d} ${cy - d * 0.3}, ${cx - d} ${cy - d * 1.1}, ${cx} ${cy - s}`,
-    `C ${cx + d} ${cy - d * 1.1}, ${cx + d} ${cy - d * 0.3}, ${cx} ${cy}`,
-    `C ${cx + d * 0.3} ${cy + d}, ${cx + d * 1.1} ${cy + d}, ${cx + s} ${cy}`,
-    `C ${cx + d * 1.1} ${cy - d}, ${cx + d * 0.3} ${cy - d}, ${cx} ${cy}`,
-    `C ${cx + d} ${cy + d * 0.3}, ${cx + d} ${cy + d * 1.1}, ${cx} ${cy + s}`,
-    `C ${cx - d} ${cy + d * 1.1}, ${cx - d} ${cy + d * 0.3}, ${cx} ${cy}`,
-    `C ${cx - d * 0.3} ${cy - d}, ${cx - d * 1.1} ${cy - d}, ${cx - s} ${cy}`,
-    `C ${cx - d * 1.1} ${cy + d}, ${cx - d * 0.3} ${cy + d}, ${cx} ${cy}`,
-    'Z',
-  ].join(' ')
+// ── Single owner tree ─────────────────────────────────────────────────────────
+interface WeekData {
+  week: string
+  weekNum: number
+  total: number
+  done: number
 }
 
-// ── Main component ───────────────────────────────────────────────────────────
-const VB_W = 900
-const VB_H = 680
+interface OwnerTreeProps {
+  owner: string
+  weeks: WeekData[]
+  allWeeks: string[]
+  onOwnerWeekFilter: (owner: string, week: string) => void
+}
 
+function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps) {
+  const [hoveredWeek, setHoveredWeek] = useState<string | null>(null)
+
+  const weekCount = allWeeks.length || WEEK_COUNT
+  const STEM_SPACING = 46
+  const svgH = svgHeight(weekCount)
+  const stemTop = TOP_PAD
+  const stemBottom = svgH - BOTTOM_PAD
+
+  // Overall owner completion
+  const totalTasks = weeks.reduce((s, w) => s + w.total, 0)
+  const doneTasks = weeks.reduce((s, w) => s + w.done, 0)
+  const overallPct = totalTasks > 0 ? doneTasks / totalTasks : 0
+
+  // Map by week label for quick lookup
+  const weekMap = useMemo(() => {
+    const m: Record<string, WeekData> = {}
+    for (const w of weeks) m[w.week] = w
+    return m
+  }, [weeks])
+
+  return (
+    <svg
+      width={SVG_W}
+      height={svgH}
+      viewBox={`0 0 ${SVG_W} ${svgH}`}
+      style={{ display: 'block', overflow: 'visible', flexShrink: 0 }}
+    >
+      {/* ── Owner label ──────────────────────────────────────────────── */}
+      <text
+        x={STEM_X}
+        y={18}
+        textAnchor="middle"
+        style={{
+          fontSize: 13,
+          fontVariant: 'small-caps',
+          fontWeight: 600,
+          fill: '#5a6847',
+          letterSpacing: '0.1em',
+          fontFamily: "'Inter', system-ui, sans-serif",
+        }}
+      >
+        {owner}
+      </text>
+
+      {/* ── Overall progress bar ─────────────────────────────────────── */}
+      {/* background */}
+      <rect x={STEM_X - 40} y={26} width={80} height={3} rx={1.5} fill="#e6ddd0" />
+      {/* fill */}
+      <rect
+        x={STEM_X - 40}
+        y={26}
+        width={80 * overallPct}
+        height={3}
+        rx={1.5}
+        fill="#5a6847"
+      />
+      {/* pct label */}
+      <text
+        x={STEM_X}
+        y={42}
+        textAnchor="middle"
+        style={{
+          fontSize: 10,
+          fill: '#8b7355',
+          fontFamily: "'Inter', system-ui, sans-serif",
+        }}
+      >
+        {Math.round(overallPct * 100)}% done
+      </text>
+
+      {/* ── Vertical stem ────────────────────────────────────────────── */}
+      <line
+        x1={STEM_X}
+        y1={stemTop}
+        x2={STEM_X}
+        y2={stemBottom}
+        stroke="#8b7355"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+
+      {/* ── Root dot ─────────────────────────────────────────────────── */}
+      <circle cx={STEM_X} cy={stemBottom} r={5} fill="#8b7355" />
+
+      {/* ── Branches ─────────────────────────────────────────────────── */}
+      {allWeeks.map((weekLabel, wi) => {
+        const data = weekMap[weekLabel]
+        const total = data?.total ?? 0
+        const done = data?.done ?? 0
+        const pct = total > 0 ? done / total : 0
+
+        const branchY = stemTop + wi * STEM_SPACING
+        const isLeft = wi % 2 === 0
+        const branchEndX = isLeft ? STEM_X - BRANCH_LEN : STEM_X + BRANCH_LEN
+        const cardX = isLeft ? STEM_X - BRANCH_LEN - CARD_W : STEM_X + BRANCH_LEN
+        const cardCY = branchY
+
+        const weekShort = weekLabel.replace(/week\s*/i, 'W')
+        const isHovered = hoveredWeek === weekLabel
+        const hasData = total > 0
+
+        // Leaves along branch line
+        const leaves = generateBranchLeaves(
+          STEM_X, branchY,
+          branchEndX, branchY,
+          3,
+          wi * 977 + weekLabel.length * 13,
+        )
+
+        return (
+          <g key={weekLabel}>
+            {/* Branch horizontal line */}
+            <line
+              x1={STEM_X}
+              y1={branchY}
+              x2={branchEndX}
+              y2={branchY}
+              stroke="#8b7355"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            />
+
+            {/* Leaves */}
+            {leaves.map((leaf) => (
+              <ellipse
+                key={leaf.key}
+                cx={leaf.cx}
+                cy={leaf.cy}
+                rx={leaf.rx}
+                ry={leaf.ry}
+                fill="#d3d9c8"
+                opacity={0.7}
+                transform={`rotate(${leaf.angle}, ${leaf.cx}, ${leaf.cy})`}
+                style={{ pointerEvents: 'none' }}
+              />
+            ))}
+
+            {/* Card */}
+            {hasData && (
+              <g
+                onMouseEnter={() => setHoveredWeek(weekLabel)}
+                onMouseLeave={() => setHoveredWeek(null)}
+                onClick={() => onOwnerWeekFilter(owner, weekLabel)}
+                style={{ cursor: 'pointer' }}
+              >
+                {/* Card shadow on hover */}
+                {isHovered && (
+                  <rect
+                    x={cardX + 2}
+                    y={cardCY - CARD_H / 2 + 3}
+                    width={CARD_W}
+                    height={CARD_H}
+                    rx={CARD_RX}
+                    fill="#8b7355"
+                    opacity={0.12}
+                  />
+                )}
+
+                {/* Card body */}
+                <rect
+                  x={cardX}
+                  y={cardCY - CARD_H / 2}
+                  width={CARD_W}
+                  height={CARD_H}
+                  rx={CARD_RX}
+                  fill={isHovered ? '#fff' : '#faf8f5'}
+                  stroke={isHovered ? '#bfa88a' : '#e6ddd0'}
+                  strokeWidth={1}
+                />
+
+                {/* Week label */}
+                <text
+                  x={cardX + 10}
+                  y={cardCY - CARD_H / 2 + 14}
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    fill: '#8b7355',
+                    letterSpacing: '0.08em',
+                    fontFamily: "'Inter', system-ui, sans-serif",
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {weekShort}
+                </text>
+
+                {/* Task count */}
+                <text
+                  x={cardX + 10}
+                  y={cardCY + 4}
+                  style={{
+                    fontSize: 11,
+                    fill: '#2d251d',
+                    fontFamily: "'Inter', system-ui, sans-serif",
+                  }}
+                >
+                  {total} task{total !== 1 ? 's' : ''}
+                </text>
+
+                {/* Mini done count */}
+                <text
+                  x={cardX + 10}
+                  y={cardCY + CARD_H / 2 - 6}
+                  style={{
+                    fontSize: 9,
+                    fill: '#8b7355',
+                    fontFamily: "'Inter', system-ui, sans-serif",
+                  }}
+                >
+                  {done} done
+                </text>
+
+                {/* Progress circle */}
+                <MiniProgressCircle
+                  pct={pct}
+                  r={8}
+                  cx={cardX + CARD_W - 16}
+                  cy={cardCY}
+                />
+              </g>
+            )}
+
+            {/* Empty week — small dot on stem */}
+            {!hasData && (
+              <circle
+                cx={STEM_X}
+                cy={branchY}
+                r={3}
+                fill="#e6ddd0"
+                stroke="#bfa88a"
+                strokeWidth={1}
+              />
+            )}
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+// ── Main GardenView ───────────────────────────────────────────────────────────
 export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
-  const [hoveredNode, setHoveredNode] = useState<{ owner: string; week: string } | null>(null)
-  const [hoveredOwner, setHoveredOwner] = useState<string | null>(null)
-
   // Sorted week list
   const allWeeks = useMemo(() => {
     const ws = new Set<string>()
     for (const t of tasks) if (t.week) ws.add(t.week)
-    return Array.from(ws).sort((a, b) => {
+    const sorted = Array.from(ws).sort((a, b) => {
       const na = parseInt(a.replace(/\D/g, ''), 10) || 0
       const nb = parseInt(b.replace(/\D/g, ''), 10) || 0
       return na - nb
     })
+    return sorted
   }, [tasks])
 
   // Summary stats
@@ -154,86 +360,28 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
   const doneTasks = tasks.filter((t) => normalizeStatus(t.status) === 'done').length
   const numWeeks = allWeeks.length
 
-  // Branch definitions — each owner gets one cubic bezier branch
-  // These are tuned to feel organic and asymmetric
-  const BRANCH_DEFS: Record<string, {
-    p0: { x: number; y: number }
-    p1: { x: number; y: number }
-    p2: { x: number; y: number }
-    p3: { x: number; y: number }
-    labelOffset: { x: number; y: number }
-  }> = {
-    Iso:   {
-      p0: { x: 450, y: 410 },
-      p1: { x: 390, y: 380 },
-      p2: { x: 260, y: 340 },
-      p3: { x: 140, y: 295 },
-      labelOffset: { x: -30, y: 8 },
-    },
-    Yuka:  {
-      p0: { x: 450, y: 390 },
-      p1: { x: 510, y: 360 },
-      p2: { x: 590, y: 310 },
-      p3: { x: 700, y: 258 },
-      labelOffset: { x: 28, y: 8 },
-    },
-    Carla: {
-      p0: { x: 450, y: 360 },
-      p1: { x: 380, y: 310 },
-      p2: { x: 250, y: 255 },
-      p3: { x: 105, y: 195 },
-      labelOffset: { x: -30, y: 8 },
-    },
-    Alex:  {
-      p0: { x: 450, y: 330 },
-      p1: { x: 510, y: 278 },
-      p2: { x: 600, y: 228 },
-      p3: { x: 730, y: 168 },
-      labelOffset: { x: 28, y: 8 },
-    },
-  }
-
-  // Build per-owner branches with nodes
-  const branches: OwnerBranch[] = useMemo(() => {
-    return OWNERS.map((owner) => {
-      const def = BRANCH_DEFS[owner]
+  // Per-owner week data
+  const ownerWeeks = useMemo(() => {
+    const result: Record<string, { week: string; weekNum: number; total: number; done: number }[]> = {}
+    for (const owner of OWNERS) {
       const ownerTasks = tasks.filter((t) => getOwner(t) === owner)
-      const nodes: WeekNode[] = []
-      for (const week of allWeeks) {
+      result[owner] = allWeeks.map((week) => {
         const wt = ownerTasks.filter((t) => t.week === week)
-        if (wt.length > 0) {
-          nodes.push({
-            week,
-            weekNum: parseInt(week.replace(/\D/g, ''), 10) || 0,
-            total: wt.length,
-            done: wt.filter((t) => normalizeStatus(t.status) === 'done').length,
-          })
+        return {
+          week,
+          weekNum: parseInt(week.replace(/\D/g, ''), 10) || 0,
+          total: wt.length,
+          done: wt.filter((t) => normalizeStatus(t.status) === 'done').length,
         }
-      }
-      return { owner, nodes, ...def }
-    })
+      }).filter((w) => w.total > 0)
+    }
+    return result
   }, [tasks, allWeeks])
-
-  // Leaves per branch (stable, seeded)
-  const branchLeaves = useMemo(() => {
-    return branches.map((b, i) => generateLeaves(b.p0, b.p1, b.p2, b.p3, 10, i * 1337 + 42))
-  }, [branches])
-
-  // Grass blades (stable)
-  const grassBlades = useMemo(() => {
-    const rand = seededRand(999)
-    return Array.from({ length: 14 }, (_, i) => {
-      const x = 80 + rand() * 740
-      const h = 10 + rand() * 16
-      const lean = (rand() - 0.5) * 18
-      return { key: i, x, h, lean }
-    })
-  }, [])
 
   return (
     <div
       style={{
-        background: 'var(--bg)',
+        background: '#faf8f5',
         minHeight: '100vh',
         paddingBottom: 48,
         fontFamily: "'Inter', system-ui, sans-serif",
@@ -243,8 +391,8 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
       <div
         style={{
           textAlign: 'center',
-          padding: '28px 16px 20px',
-          color: 'var(--text-muted)',
+          padding: '28px 16px 24px',
+          color: '#8b7355',
           fontSize: 13,
           letterSpacing: '0.04em',
         }}
@@ -252,287 +400,28 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
         {totalTasks} tasks · {numWeeks} weeks · {OWNERS.length} contributors · {doneTasks} done
       </div>
 
-      {/* SVG tree */}
-      <div style={{ width: '100%' }}>
-        <svg
-          viewBox={`0 0 ${VB_W} ${VB_H}`}
-          width="100%"
-          height="auto"
-          preserveAspectRatio="xMidYMid meet"
-          style={{ display: 'block', maxHeight: '78vh' }}
-        >
-          <defs>
-            {/* Clip masks for partial-fill nodes */}
-            {branches.flatMap((b) =>
-              b.nodes.map((node) => {
-                const tValues = spreadT(b.nodes.length)
-                const idx = b.nodes.indexOf(node)
-                const pt = bezierPoint(tValues[idx], b.p0, b.p1, b.p2, b.p3)
-                const r = 6 + node.total * 1.5
-                const pct = node.total > 0 ? node.done / node.total : 0
-                if (pct === 0 || pct >= 1) return null
-                const clipH = r * 2 * pct
-                const clipY = pt.y + r - clipH
-                return (
-                  <clipPath key={`clip-${b.owner}-${node.week}`} id={`clip-${b.owner}-${node.week}`}>
-                    <rect x={pt.x - r - 2} y={clipY} width={r * 2 + 4} height={clipH + 2} />
-                  </clipPath>
-                )
-              }),
-            )}
-          </defs>
-
-          {/* ── Ground ─────────────────────────────────────────────────────── */}
-          <path
-            d={`M 20 ${VB_H - 55} C 150 ${VB_H - 62}, 400 ${VB_H - 58}, 650 ${VB_H - 60} C 780 ${VB_H - 61}, 860 ${VB_H - 56}, 880 ${VB_H - 52}`}
-            fill="none"
-            stroke="#c8b99a"
-            strokeWidth={1.5}
-            opacity={0.5}
+      {/* Four trees row */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          gap: 24,
+          overflowX: 'auto',
+          padding: '0 24px 24px',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        {OWNERS.map((owner) => (
+          <OwnerTree
+            key={owner}
+            owner={owner}
+            weeks={ownerWeeks[owner]}
+            allWeeks={allWeeks}
+            onOwnerWeekFilter={onOwnerWeekFilter}
           />
-
-          {/* Grass blades */}
-          {grassBlades.map((g) => (
-            <path
-              key={g.key}
-              d={`M ${g.x} ${VB_H - 55} Q ${g.x + g.lean} ${VB_H - 55 - g.h * 0.6} ${g.x + g.lean * 1.4} ${VB_H - 55 - g.h}`}
-              fill="none"
-              stroke="#a8b890"
-              strokeWidth={1}
-              strokeLinecap="round"
-              opacity={0.55}
-            />
-          ))}
-
-          {/* ── Trunk ──────────────────────────────────────────────────────── */}
-          {/* Wide base stroke (tapered via two overlapping paths) */}
-          <path
-            d="M 450 600 C 450 560, 450 510, 450 430"
-            fill="none"
-            stroke="#735e47"
-            strokeWidth={14}
-            strokeLinecap="round"
-          />
-          <path
-            d="M 450 490 C 450 470, 450 450, 450 350"
-            fill="none"
-            stroke="#735e47"
-            strokeWidth={7}
-            strokeLinecap="round"
-          />
-          {/* Slight texture line */}
-          <path
-            d="M 449 580 C 448 540, 451 490, 449 430"
-            fill="none"
-            stroke="#8b7355"
-            strokeWidth={1.5}
-            opacity={0.3}
-            strokeLinecap="round"
-          />
-
-          {/* ── Branches ───────────────────────────────────────────────────── */}
-          {branches.map((b) => {
-            const isOwnerHov = hoveredOwner === b.owner
-            const tValues = spreadT(b.nodes.length)
-
-            return (
-              <g
-                key={`branch-${b.owner}`}
-                onMouseEnter={() => setHoveredOwner(b.owner)}
-                onMouseLeave={() => setHoveredOwner(null)}
-                style={{ cursor: 'default' }}
-              >
-                {/* Branch curve */}
-                <path
-                  d={bezierPathD(b.p0, b.p1, b.p2, b.p3)}
-                  fill="none"
-                  stroke={isOwnerHov ? '#5a4832' : '#8b7355'}
-                  strokeWidth={isOwnerHov ? 5 : 4}
-                  strokeLinecap="round"
-                  style={{ transition: 'stroke 0.2s, stroke-width 0.15s' }}
-                />
-
-                {/* Decorative leaves */}
-                {branchLeaves[branches.indexOf(b)].map((leaf) => (
-                  <ellipse
-                    key={leaf.key}
-                    cx={leaf.cx}
-                    cy={leaf.cy}
-                    rx={leaf.rx}
-                    ry={leaf.ry}
-                    fill="#d3d9c8"
-                    opacity={0.7}
-                    transform={`rotate(${leaf.angle}, ${leaf.cx}, ${leaf.cy})`}
-                    style={{ pointerEvents: 'none' }}
-                  />
-                ))}
-
-                {/* Owner label at branch tip */}
-                <text
-                  x={b.p3.x + b.labelOffset.x}
-                  y={b.p3.y + b.labelOffset.y}
-                  textAnchor="middle"
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    fontVariant: 'small-caps',
-                    fill: isOwnerHov ? 'var(--text-secondary, #6b5e50)' : 'var(--text-muted, #9a8c7e)',
-                    letterSpacing: '0.12em',
-                    fontFamily: "'Inter', system-ui, sans-serif",
-                    transition: 'fill 0.2s',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  {b.owner.toUpperCase()}
-                </text>
-
-                {/* ── Nodes along the branch ─────────────────────────────── */}
-                {b.nodes.map((node, ni) => {
-                  const t = tValues[ni]
-                  const pt = bezierPoint(t, b.p0, b.p1, b.p2, b.p3)
-                  const r = 6 + node.total * 1.5
-                  const pct = node.total > 0 ? node.done / node.total : 0
-                  const style = getNodeStyle(node.done, node.total)
-                  const isHovNode = hoveredNode?.owner === b.owner && hoveredNode?.week === node.week
-                  const isHovBranch = isOwnerHov
-                  const displayR = isHovNode ? r + 2.5 : isHovBranch ? r + 1 : r
-                  const clipId = `clip-${b.owner}-${node.week}`
-                  const bloomed = pct >= 1
-                  const weekLabel = node.week.replace('Week ', 'W').replace('week ', 'W')
-
-                  return (
-                    <g
-                      key={`node-${b.owner}-${node.week}`}
-                      onMouseEnter={() => setHoveredNode({ owner: b.owner, week: node.week })}
-                      onMouseLeave={() => setHoveredNode(null)}
-                      onClick={() => onOwnerWeekFilter(b.owner, node.week)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      {/* Hover glow */}
-                      {isHovNode && (
-                        <circle
-                          cx={pt.x}
-                          cy={pt.y}
-                          r={displayR + 7}
-                          fill={bloomed ? '#5a6847' : '#d4c5b0'}
-                          opacity={0.18}
-                          style={{ pointerEvents: 'none' }}
-                        />
-                      )}
-
-                      {bloomed ? (
-                        /* 100% done → flower shape */
-                        <path
-                          d={flowerPath(pt.x, pt.y, displayR * 0.85)}
-                          fill="#5a6847"
-                          style={{
-                            transition: 'transform 0.15s',
-                            transformOrigin: `${pt.x}px ${pt.y}px`,
-                            pointerEvents: 'all',
-                          }}
-                        />
-                      ) : pct > 0 ? (
-                        /* 1–99% done → circle with partial fill overlay */
-                        <>
-                          {/* Base circle (stroke only) */}
-                          <circle
-                            cx={pt.x}
-                            cy={pt.y}
-                            r={displayR}
-                            fill="transparent"
-                            stroke={style.stroke}
-                            strokeWidth={style.strokeWidth}
-                          />
-                          {/* Fill overlay clipped to bottom portion */}
-                          <circle
-                            cx={pt.x}
-                            cy={pt.y}
-                            r={displayR}
-                            fill={style.fill}
-                            clipPath={`url(#${clipId})`}
-                            style={{ pointerEvents: 'none' }}
-                          />
-                        </>
-                      ) : (
-                        /* 0% done → bud (stroke only) */
-                        <circle
-                          cx={pt.x}
-                          cy={pt.y}
-                          r={displayR}
-                          fill="transparent"
-                          stroke="#bfa88a"
-                          strokeWidth={1.5}
-                        />
-                      )}
-
-                      {/* Week label */}
-                      <text
-                        x={pt.x}
-                        y={pt.y + displayR + 11}
-                        textAnchor="middle"
-                        style={{
-                          fontSize: 9,
-                          fill: '#bfa88a',
-                          fontFamily: "'Inter', system-ui, sans-serif",
-                          pointerEvents: 'none',
-                          letterSpacing: '0.04em',
-                        }}
-                      >
-                        {weekLabel}
-                      </text>
-
-                      {/* Tooltip */}
-                      {isHovNode && (() => {
-                        const tw = 130
-                        const th = 42
-                        const tx = Math.min(Math.max(pt.x - tw / 2, 4), VB_W - tw - 4)
-                        const ty = pt.y - displayR - th - 10
-                        return (
-                          <g style={{ pointerEvents: 'none' }}>
-                            <rect
-                              x={tx}
-                              y={ty}
-                              width={tw}
-                              height={th}
-                              rx={5}
-                              fill="#2d251d"
-                              opacity={0.93}
-                            />
-                            <text
-                              x={tx + tw / 2}
-                              y={ty + 15}
-                              textAnchor="middle"
-                              style={{
-                                fontSize: 10,
-                                fill: '#faf8f5',
-                                fontWeight: 500,
-                                fontFamily: "'Inter', system-ui, sans-serif",
-                              }}
-                            >
-                              {node.week} · {node.done} / {node.total} done
-                            </text>
-                            <text
-                              x={tx + tw / 2}
-                              y={ty + 30}
-                              textAnchor="middle"
-                              style={{
-                                fontSize: 9,
-                                fill: '#bfa88a',
-                                fontFamily: "'Inter', system-ui, sans-serif",
-                              }}
-                            >
-                              click to filter board
-                            </text>
-                          </g>
-                        )
-                      })()}
-                    </g>
-                  )
-                })}
-              </g>
-            )
-          })}
-        </svg>
+        ))}
       </div>
     </div>
   )
