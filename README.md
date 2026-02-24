@@ -1,73 +1,75 @@
-# React + TypeScript + Vite
+# 🌿 Forage Bali Team Task Board
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Mobile-first kanban board for the Forage Bali team.
 
-Currently, two official plugins are available:
+## Live URLs
+- **Production:** https://todo.foragebali.com *(needs DNS — see below)*
+- **Vercel fallback:** https://forage-bali-todo.vercel.app
+- **Password:** `foragebali2026`
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## DNS Setup Required
 
-## React Compiler
+The `foragebali.com` domain is managed at Hover.com. Add this DNS record:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Type | Host | Value | TTL |
+|------|------|-------|-----|
+| CNAME | `todo` | `cname.vercel-dns.com.` | 3600 |
 
-## Expanding the ESLint configuration
+Once added, `todo.foragebali.com` will go live within ~10 minutes.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Stack
+- React + TypeScript + Vite
+- Ant Design (antd) for UI
+- Supabase for data storage
+- @dnd-kit for drag-and-drop
+- Deployed on Vercel
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Features
+- 🔐 Password gate (localStorage, no backend needed)
+- 📋 Kanban columns: To Do → In Progress → Blocked → Done
+- 👤 Filter by owner: Iso / Yuka / Carla / Alex
+- 📅 Filter by Week (Week 1–12) and Month (Month 1–3)
+- 🎯 Drag cards between columns to update status
+- ✏️ Tap any card to edit/delete
+- ➕ FAB button to add new tasks
+- 🔄 Real-time sync via Supabase realtime
+- 📱 Mobile-first design
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Team Colors
+- 🔵 Iso — Blue
+- 🟢 Yuka — Green  
+- 🟠 Carla — Orange
+- 🟣 Alex — Purple
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Supabase Schema
+```sql
+tasks (
+  id uuid,
+  title text,
+  description text,
+  owner text,           -- 'Iso', 'Yuka', 'Carla', 'Alex'
+  assigned_agent text,  -- legacy field
+  status text,          -- 'todo', 'in-progress', 'blocked', 'done'
+  priority text,        -- 'high', 'normal', 'low'
+  project text,
+  week text,            -- 'Week 1' ... 'Week 12'
+  month text,           -- 'Month 1', 'Month 2', 'Month 3'
+  due_date text,
+  created_at timestamptz,
+  updated_at timestamptz
+)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Re-seed Tasks
+```bash
+python3 seed.py
 ```
+
+## Development
+```bash
+npm install
+npm run dev
+```
+
+## Deploy
+Push to `main` — Vercel auto-deploys.
