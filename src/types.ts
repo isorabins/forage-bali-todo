@@ -20,27 +20,27 @@ export interface Task {
 
 export const OWNERS: TaskOwner[] = ['Iso', 'Yuka', 'Carla', 'Alex']
 
-// Muted, editorial owner badge colors
+// Owner badge colors — warm terracotta palette
 export const OWNER_COLORS: Record<string, string> = {
-  Iso: '#313929',
-  Yuka: '#523e35',
-  Carla: '#52504c',
-  Alex: '#4a3d30',
+  Iso: '#4a3728',
+  Yuka: '#523530',
+  Carla: '#4a4642',
+  Alex: '#3d3028',
 }
 
 export const OWNER_BG: Record<string, string> = {
-  Iso: '#e8ebe2',
-  Yuka: '#f0ebe5',
-  Carla: '#f0efed',
-  Alex: '#f3efe8',
+  Iso: '#f0ebe4',
+  Yuka: '#f2e8e4',
+  Carla: '#efeeec',
+  Alex: '#f0ece6',
 }
 
-// Dot colors for calendar chips (slightly warmer dots)
+// Dot colors for calendar chips
 export const OWNER_DOT: Record<string, string> = {
-  Iso: '#7a8c65',
-  Yuka: '#9c7060',
-  Carla: '#8a8780',
-  Alex: '#8a7262',
+  Iso: '#c97d60',
+  Yuka: '#b86b50',
+  Carla: '#8a8580',
+  Alex: '#a87060',
 }
 
 export const STATUS_COLUMNS: { key: TaskStatus; label: string }[] = [
@@ -57,10 +57,10 @@ export const PRIORITY_LABELS: Record<string, string> = {
 
 // Left border colors for priority
 export const PRIORITY_BORDER: Record<string, string> = {
-  high: '#5a6847',
-  normal: '#e6ddd0',
+  high: '#d4693a',
+  normal: '#e2d9d0',
   low: 'transparent',
-  medium: '#e6ddd0',
+  medium: '#e2d9d0',
 }
 
 // Normalize status for display (legacy 'up-next', 'in-progress', 'blocked' → 'todo')

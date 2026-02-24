@@ -145,7 +145,7 @@ function App() {
 
   if (!authed) {
     return (
-      <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm, token: { colorPrimary: '#5a6847' } }}>
+      <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm, token: { colorPrimary: '#c97d60' } }}>
         <PasswordGate onUnlock={() => setAuthed(true)} />
       </ConfigProvider>
     )
@@ -159,14 +159,14 @@ function App() {
       theme={{
         algorithm: theme.defaultAlgorithm,
         token: {
-          colorPrimary: '#5a6847',
-          borderRadius: 6,
+          colorPrimary: '#c97d60',
+          borderRadius: 8,
           fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-          colorBorder: '#e6ddd0',
+          colorBorder: '#e2d9d0',
           colorBgContainer: '#ffffff',
-          colorText: '#2d251d',
-          colorTextSecondary: '#8b7355',
-          colorTextPlaceholder: '#bfa88a',
+          colorText: '#2d2a27',
+          colorTextSecondary: '#5c5853',
+          colorTextPlaceholder: '#8a8580',
         },
       }}
     >
@@ -195,9 +195,9 @@ function App() {
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
             <span
               style={{
-                fontSize: 26,
-                fontWeight: 600,
-                letterSpacing: '-0.02em',
+                fontSize: 28,
+                fontWeight: 700,
+                letterSpacing: '-0.03em',
                 color: 'var(--text-primary)',
                 lineHeight: 1,
               }}
@@ -208,10 +208,10 @@ function App() {
               style={{
                 fontSize: 12,
                 color: 'var(--text-muted)',
-                letterSpacing: '0.04em',
+                letterSpacing: '0.03em',
               }}
             >
-              {todoCount} open · {doneCount} done
+              <span style={{ color: 'var(--coral)', fontWeight: 600 }}>{todoCount}</span> open · {doneCount} done
             </span>
           </div>
 
@@ -291,14 +291,7 @@ function App() {
 
           {/* Divider */}
           {(weekOptions.length > 0 || monthOptions.length > 0) && (
-            <div
-              style={{
-                width: 1,
-                height: 18,
-                background: 'var(--border)',
-                margin: '0 2px',
-              }}
-            />
+            <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 2px' }} />
           )}
 
           {/* Week filter */}
@@ -380,7 +373,7 @@ function App() {
           fontSize: 24,
           lineHeight: 1,
           cursor: 'pointer',
-          boxShadow: '0 2px 12px rgba(90,104,71,0.35)',
+          boxShadow: '0 2px 12px rgba(201,125,96,0.38)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -390,11 +383,11 @@ function App() {
         }}
         onMouseEnter={(e) => {
           ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-hover)'
-          ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 16px rgba(90,104,71,0.45)'
+          ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 16px rgba(201,125,96,0.50)'
         }}
         onMouseLeave={(e) => {
           ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--accent)'
-          ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 12px rgba(90,104,71,0.35)'
+          ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 12px rgba(201,125,96,0.38)'
         }}
       >
         +
