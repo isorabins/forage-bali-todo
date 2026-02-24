@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import type { Task } from '../types'
 import { normalizeStatus, WEEK_DATES } from '../types'
 
@@ -7,26 +7,42 @@ interface Props {
   onOwnerWeekFilter: (owner: string, week: string) => void
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const SVG_W = 600
-const SVG_H = 700
-const TRUNK_X = 300
-const TRUNK_BOTTOM = 640
-const TRUNK_TOP = 90
-const WEEK_COUNT = 12
-const WEEK_SPACING = (TRUNK_BOTTOM - TRUNK_TOP) / (WEEK_COUNT - 1) // ~50
+// ── Palette ────────────────────────────────────────────────────────────────────
+const BARK       = '#8b7355'
+const GREEN_BUD  = '#7a9e6b'
+const GREEN_FULL = '#5a8a4a'
+const LEAF_COLOR = '#a8c498'
+const CORAL      = '#c97d60'
+const BARE_SAND  = '#d4c5b0'
+
+// ── Layout ─────────────────────────────────────────────────────────────────────
+const SVG_W        = 800
+const SVG_H        = 900
+const TRUNK_X      = 400
+const TRUNK_BOTTOM = 820
+const TRUNK_TOP    = 80
+const WEEK_COUNT   = 12
+const WEEK_SPACING = (TRUNK_BOTTOM - TRUNK_TOP) / (WEEK_COUNT - 1)  // ≈ 67
+const TRUNK_LENGTH = TRUNK_BOTTOM - TRUNK_TOP                        // 740
 
 const MILESTONES: Record<number, string> = {
-  1: 'Foundation',
-  3: 'Noko goes live',
-  6: 'First beta class',
-  9: 'First paid class',
+  1:  'Foundation',
+  3:  'Noko goes live',
+  6:  'First beta class',
+  9:  'First paid class',
   12: 'Scale',
 }
 
-const TRUNK_LENGTH = TRUNK_BOTTOM - TRUNK_TOP // 550
+// ── Current week from today's date ────────────────────────────────────────────
+function computeActualWeek(): number {
+  const now          = new Date()
+  const weekOneStart = new Date('2026-02-24')
+  const diffDays     = Math.floor((now.getTime() - weekOneStart.getTime()) / 86_400_000)
+  if (diffDays < 0) return 1
+  return Math.max(1, Math.min(12, Math.floor(diffDays / 7) + 1))
+}
 
-// ── Seeded random (stable across renders) ─────────────────────────────────────
+// ── Seeded PRNG (stable across renders) ───────────────────────────────────────
 function seededRand(seed: number) {
   let s = seed | 0
   return () => {
@@ -35,7 +51,7 @@ function seededRand(seed: number) {
   }
 }
 
-// ── Bezier point at parameter t ────────────────────────────────────────────────
+// ── Cubic bezier helpers ───────────────────────────────────────────────────────
 function bezierPoint(
   p0x: number, p0y: number,
   p1x: number, p1y: number,
@@ -44,421 +60,570 @@ function bezierPoint(
   t: number,
 ): [number, number] {
   const mt = 1 - t
-  const x = mt * mt * mt * p0x + 3 * mt * mt * t * p1x + 3 * mt * t * t * p2x + t * t * t * p3x
-  const y = mt * mt * mt * p0y + 3 * mt * mt * t * p1y + 3 * mt * t * t * p2y + t * t * t * p3y
-  return [x, y]
+  return [
+    mt**3*p0x + 3*mt**2*t*p1x + 3*mt*t**2*p2x + t**3*p3x,
+    mt**3*p0y + 3*mt**2*t*p1y + 3*mt*t**2*p2y + t**3*p3y,
+  ]
 }
 
-// ── Branch bezier path builder ─────────────────────────────────────────────────
-function branchPath(
-  sx: number, sy: number,
-  ex: number, ey: number,
-  direction: 'left' | 'right',
-): { path: string; cp1x: number; cp1y: number; cp2x: number; cp2y: number } {
-  const sign = direction === 'left' ? -1 : 1
-  const dx = Math.abs(ex - sx)
-  const cp1x = sx + sign * dx * 0.25
-  const cp1y = sy - 16
-  const cp2x = sx + sign * dx * 0.75
-  const cp2y = ey - 8
+function branchPath(sx: number, sy: number, ex: number, ey: number, dir: 'left' | 'right') {
+  const sign = dir === 'left' ? -1 : 1
+  const dx   = Math.abs(ex - sx)
+  const cp1x = sx + sign * dx * 0.25;  const cp1y = sy - 18
+  const cp2x = sx + sign * dx * 0.75;  const cp2y = ey - 10
   return {
     path: `M ${sx},${sy} C ${cp1x},${cp1y} ${cp2x},${cp2y} ${ex},${ey}`,
     cp1x, cp1y, cp2x, cp2y,
   }
 }
 
-// ── Leaf component ─────────────────────────────────────────────────────────────
-interface Leaf {
-  cx: number
-  cy: number
-  rx: number
-  ry: number
-  angle: number
-  accent: boolean
-}
+// ── Leaf data ──────────────────────────────────────────────────────────────────
+interface Leaf { cx: number; cy: number; rx: number; ry: number; angle: number; accent: boolean }
 
 function generateLeaves(
   sx: number, sy: number,
   ex: number, ey: number,
   cp1x: number, cp1y: number,
   cp2x: number, cp2y: number,
-  count: number,
-  seedOffset: number,
+  count: number, seedOffset: number,
 ): Leaf[] {
   const rand = seededRand(seedOffset)
   return Array.from({ length: count }, (_, i) => {
-    const t = 0.1 + (i / Math.max(count - 1, 1)) * 0.75 + (rand() - 0.5) * 0.08
-    const tc = Math.max(0, Math.min(1, t))
-    const [bx, by] = bezierPoint(sx, sy, cp1x, cp1y, cp2x, cp2y, ex, ey, tc)
-    const perp = (rand() - 0.5) * 18
-    const perpX = (rand() - 0.5) * 8
-    const angle = -60 + rand() * 120
-    const rx = 5 + rand() * 4
-    const ry = 2.5 + rand() * 2.5
-    const accent = rand() < 0.25
-    return { cx: bx + perpX, cy: by + perp, rx, ry, angle, accent }
+    const t   = Math.max(0, Math.min(1, 0.1 + (i / Math.max(count-1,1)) * 0.75 + (rand()-0.5)*0.08))
+    const [bx, by] = bezierPoint(sx, sy, cp1x, cp1y, cp2x, cp2y, ex, ey, t)
+    return {
+      cx: bx + (rand()-0.5)*10,
+      cy: by + (rand()-0.5)*24,
+      rx: 5 + rand()*5,
+      ry: 2.5 + rand()*3,
+      angle: -60 + rand()*120,
+      accent: rand() < 0.18,
+    }
   })
 }
 
-// ── Tooltip ────────────────────────────────────────────────────────────────────
-interface TooltipData {
-  x: number
-  y: number
-  week: string
-  done: number
-  total: number
+// ── Flower (4-petal SVG) ───────────────────────────────────────────────────────
+function flowerPath(cx: number, cy: number, r = 9): string {
+  const p = r * 0.55
+  return [
+    `M ${cx},${cy-r}`,
+    `C ${cx+p},${cy-r} ${cx+r},${cy-p} ${cx},${cy}`,
+    `C ${cx+r},${cy+p} ${cx+p},${cy+r} ${cx},${cy+r}`,
+    `C ${cx-p},${cy+r} ${cx-r},${cy+p} ${cx},${cy}`,
+    `C ${cx-r},${cy-p} ${cx-p},${cy-r} ${cx},${cy-r}`,
+    'Z',
+  ].join(' ')
 }
 
+// ── Diamond hint for future milestones ────────────────────────────────────────
+function diamondPath(cx: number, cy: number, r = 5): string {
+  return `M ${cx},${cy-r} L ${cx+r},${cy} L ${cx},${cy+r} L ${cx-r},${cy} Z`
+}
+
+// ── Growth stages ─────────────────────────────────────────────────────────────
+type Stage = 'bare' | 'budding' | 'growing' | 'lush' | 'bloomed'
+
+function getStage(pct: number, visible: boolean, hasData: boolean): Stage {
+  if (!visible || !hasData) return 'bare'
+  if (pct >= 1)    return 'bloomed'
+  if (pct >= 0.67) return 'lush'
+  if (pct >= 0.34) return 'growing'
+  if (pct > 0)     return 'budding'
+  return 'bare'
+}
+
+function stageBranch(s: Stage): { color: string; opacity: number; width: number } {
+  if (s === 'bloomed' || s === 'lush') return { color: GREEN_FULL, opacity: 1.0,  width: 2.0 }
+  if (s === 'growing')                 return { color: GREEN_BUD,  opacity: 0.85, width: 1.8 }
+  if (s === 'budding')                 return { color: BARK,       opacity: 0.55, width: 1.5 }
+  return                                      { color: BARE_SAND,  opacity: 0.2,  width: 1.2 }
+}
+
+function stageLeafCount(s: Stage): number {
+  if (s === 'bloomed') return 12
+  if (s === 'lush')    return 8
+  if (s === 'growing') return 5
+  if (s === 'budding') return 2
+  return 0
+}
+
+function leafColor(s: Stage, accent: boolean): string {
+  if (accent && s === 'bloomed') return CORAL
+  if (s === 'lush' || s === 'bloomed') return GREEN_BUD
+  if (s === 'growing') return LEAF_COLOR
+  return BARE_SAND
+}
+
+// ── Tooltip ────────────────────────────────────────────────────────────────────
+interface TooltipData { x: number; y: number; week: string; done: number; total: number }
+
 function Tooltip({ data }: { data: TooltipData }) {
-  const weekNum = parseInt(data.week.replace(/\D/g, ''), 10)
-  const dateRange = WEEK_DATES[`Week ${weekNum}`] || ''
+  const n = parseInt(data.week.replace(/\D/g,''), 10)
+  const dr = WEEK_DATES[`Week ${n}`] || ''
   return (
     <g style={{ pointerEvents: 'none' }}>
-      <rect
-        x={data.x - 72}
-        y={data.y - 38}
-        width={144}
-        height={32}
-        rx={6}
-        fill="#2d2a27"
-        opacity={0.92}
-      />
-      <text
-        x={data.x}
-        y={data.y - 22}
-        textAnchor="middle"
-        style={{ fontSize: 11, fill: '#f8f5f2', fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 500 }}
-      >
-        {data.week} · {data.done} done / {data.total} total
+      <rect x={data.x-72} y={data.y-42} width={144} height={36} rx={6} fill="#2d2a27" opacity={0.93}/>
+      <text x={data.x} y={data.y-26} textAnchor="middle"
+        style={{ fontSize: 11, fill: '#f8f5f2', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 500 }}>
+        {data.week} · {data.done}/{data.total} done
       </text>
-      {dateRange && (
-        <text
-          x={data.x}
-          y={data.y - 10}
-          textAnchor="middle"
-          style={{ fontSize: 9, fill: '#d4c5b0', fontFamily: "'Inter', system-ui, sans-serif" }}
-        >
-          {dateRange}
+      {dr && (
+        <text x={data.x} y={data.y-12} textAnchor="middle"
+          style={{ fontSize: 9, fill: BARE_SAND, fontFamily: "'Inter',system-ui,sans-serif" }}>
+          {dr}
         </text>
       )}
     </g>
   )
 }
 
-// ── Main GardenView ────────────────────────────────────────────────────────────
+// ── Main Component ─────────────────────────────────────────────────────────────
 export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
-  const [leavesVisible, setLeavesVisible] = useState(false)
-  const [tooltip, setTooltip] = useState<TooltipData | null>(null)
-  const [hoveredMilestone, setHoveredMilestone] = useState<number | null>(null)
+  const actualWeek = useMemo(() => computeActualWeek(), [])
 
-  // Kick off animation sequence
-  useEffect(() => {
-    const trunkDuration = 1200 // ms
-    const t2 = setTimeout(() => setLeavesVisible(true), trunkDuration + 500)
-    return () => { clearTimeout(t2) }
+  // previewWeek: what the slider/play shows. Starts at actualWeek (bare tree).
+  const [previewWeek, setPreviewWeekState] = useState(actualWeek)
+  const previewWeekRef = useRef(actualWeek)
+  const setPreviewWeek = useCallback((w: number) => {
+    previewWeekRef.current = w
+    setPreviewWeekState(w)
   }, [])
 
-  // Build week stats (all owners combined)
+  const [isDragging, setIsDragging]  = useState(false)
+  const [isPlaying,  setIsPlaying]   = useState(false)
+  const [tooltip,    setTooltip]     = useState<TooltipData | null>(null)
+  const [hoveredMs,  setHoveredMs]   = useState<number | null>(null)
+
+  const springRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const playRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── Week stats ───────────────────────────────────────────────────────────────
   const weekStats = useMemo(() => {
     const map: Record<string, { done: number; total: number }> = {}
-    for (const task of tasks) {
-      if (!task.week) continue
-      if (!map[task.week]) map[task.week] = { done: 0, total: 0 }
-      map[task.week].total++
-      if (normalizeStatus(task.status) === 'done') map[task.week].done++
+    for (const t of tasks) {
+      if (!t.week) continue
+      if (!map[t.week]) map[t.week] = { done: 0, total: 0 }
+      map[t.week].total++
+      if (normalizeStatus(t.status) === 'done') map[t.week].done++
     }
     return map
   }, [tasks])
 
-  const totalDone = tasks.filter(t => normalizeStatus(t.status) === 'done').length
+  const totalDone  = tasks.filter(t => normalizeStatus(t.status) === 'done').length
   const totalTasks = tasks.length
 
-  // Max tasks across weeks (for branch length scaling)
   const maxWeekTasks = useMemo(() => {
     const vals = Object.values(weekStats).map(w => w.total)
     return Math.max(...vals, 1)
   }, [weekStats])
 
-  // Node positions
+  // ── Summary text ─────────────────────────────────────────────────────────────
+  const summaryText = useMemo(() => {
+    const total = totalTasks || 220
+    if (totalDone >= total) return 'The Forage Bali forest is complete. 🌿'
+    if (totalDone / total > 0.5) return `Your garden is in full bloom — ${totalDone} of ${total} tasks done`
+    return `Your garden is just beginning to grow — ${totalDone} of ${total} tasks done`
+  }, [totalDone, totalTasks])
+
+  // ── Spring-back: step previewWeek toward actualWeek over ~600ms ──────────────
+  const triggerSpringBack = useCallback(() => {
+    if (springRef.current) clearTimeout(springRef.current)
+    const start = previewWeekRef.current
+    const end   = actualWeek
+    if (start === end) return
+    const steps   = Math.abs(end - start)
+    const stepMs  = Math.max(40, Math.round(600 / steps))
+    const dir     = end > start ? 1 : -1
+    let   current = start
+    const tick = () => {
+      current += dir
+      setPreviewWeek(current)
+      if (current !== end) springRef.current = setTimeout(tick, stepMs)
+    }
+    springRef.current = setTimeout(tick, 60)
+  }, [actualWeek, setPreviewWeek])
+
+  // ── Slider handlers ───────────────────────────────────────────────────────────
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (springRef.current) clearTimeout(springRef.current)
+    setIsDragging(true)
+    setPreviewWeek(parseInt(e.target.value, 10))
+  }
+  const handleSliderUp = () => {
+    setIsDragging(false)
+    triggerSpringBack()
+  }
+
+  // ── Play / Reset ──────────────────────────────────────────────────────────────
+  const handlePlay = () => {
+    if (isPlaying) {
+      if (playRef.current) clearTimeout(playRef.current)
+      setIsPlaying(false)
+      triggerSpringBack()
+      return
+    }
+    if (springRef.current) clearTimeout(springRef.current)
+    setIsPlaying(true)
+    setPreviewWeek(1)
+    let wk = 1
+    const advance = () => {
+      wk++
+      if (wk > 12) { setIsPlaying(false); triggerSpringBack(); return }
+      setPreviewWeek(wk)
+      playRef.current = setTimeout(advance, 800)
+    }
+    playRef.current = setTimeout(advance, 800)
+  }
+
+  const handleReset = () => {
+    if (playRef.current)   clearTimeout(playRef.current)
+    if (springRef.current) clearTimeout(springRef.current)
+    setIsPlaying(false)
+    setIsDragging(false)
+    setPreviewWeek(actualWeek)
+  }
+
+  // Cleanup timers on unmount
+  useEffect(() => () => {
+    if (springRef.current) clearTimeout(springRef.current)
+    if (playRef.current)   clearTimeout(playRef.current)
+  }, [])
+
+  // ── Node data ─────────────────────────────────────────────────────────────────
   const nodes = useMemo(() =>
     Array.from({ length: WEEK_COUNT }, (_, i) => {
-      const weekNum = i + 1
+      const weekNum  = i + 1
       const weekLabel = `Week ${weekNum}`
-      const y = TRUNK_BOTTOM - i * WEEK_SPACING
-      const stats = weekStats[weekLabel] || { done: 0, total: 0 }
-      const isDone = stats.total > 0 && stats.done >= stats.total
-      const pct = stats.total > 0 ? stats.done / stats.total : 0
-      return { weekNum, weekLabel, y, stats, isDone, pct }
-    }), [weekStats])
+      const y        = TRUNK_BOTTOM - i * WEEK_SPACING
+      const stats    = weekStats[weekLabel] || { done: 0, total: 0 }
+      const pct      = stats.total > 0 ? stats.done / stats.total : 0
+      return { weekNum, weekLabel, y, stats, pct }
+    }),
+  [weekStats])
+
+  const currentDateRange = WEEK_DATES[`Week ${previewWeek}`] || ''
 
   return (
-    <div
-      style={{
-        background: '#f8f5f2',
-        minHeight: '100vh',
-        paddingBottom: 48,
-        fontFamily: "'Inter', system-ui, sans-serif",
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-      }}
-    >
-      {/* Inline keyframe styles */}
+    <div style={{
+      background: '#f8f5f2',
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      fontFamily: "'Inter', system-ui, sans-serif",
+    }}>
+      {/* ── Inline styles ─────────────────────────────────────────────────────── */}
       <style>{`
         @keyframes trunkDraw {
           from { stroke-dashoffset: ${TRUNK_LENGTH}; }
           to   { stroke-dashoffset: 0; }
         }
-        @keyframes leafFadeIn {
-          from { opacity: 0; }
-          to   { opacity: 1; }
+        .g-branch, .g-node, .g-leaf {
+          transition: all 0.4s ease;
         }
-        .garden-leaf {
-          transition: opacity 0.6s ease;
+        .g-leaf {
+          transition: opacity 0.4s ease, transform 0.4s ease;
         }
-        .milestone-label {
-          transition: font-size 0.15s ease, fill 0.15s ease;
+        .scrubber-range {
+          -webkit-appearance: none;
+          width: 100%;
+          height: 3px;
+          background: #e2d9d0;
+          border-radius: 2px;
+          outline: none;
+          cursor: pointer;
         }
+        .scrubber-range::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          width: 16px; height: 16px;
+          border-radius: 50%;
+          background: #c97d60;
+          cursor: pointer;
+          box-shadow: 0 1px 4px rgba(201,125,96,0.4);
+          transition: transform 0.15s;
+        }
+        .scrubber-range::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        .scrubber-range::-moz-range-thumb {
+          width: 16px; height: 16px;
+          border-radius: 50%;
+          background: #c97d60;
+          cursor: pointer;
+          border: none;
+          box-shadow: 0 1px 4px rgba(201,125,96,0.4);
+        }
+        .scrub-btn {
+          background: none; border: none;
+          cursor: pointer; padding: 4px 10px;
+          color: #8a8580; font-size: 12px;
+          font-family: 'Inter', system-ui, sans-serif;
+          letter-spacing: 0.03em; border-radius: 4px;
+          transition: color 0.15s;
+        }
+        .scrub-btn:hover { color: #5c5853; }
+        .scrub-btn.playing { color: #c97d60; }
+        .ms-label { transition: font-size 0.15s, fill 0.15s; }
       `}</style>
 
-      {/* Completion counter */}
-      <div
-        style={{
-          textAlign: 'center',
-          paddingTop: 24,
-          paddingBottom: 4,
-          color: '#8a8580',
-          fontSize: 13,
-          letterSpacing: '0.04em',
-        }}
-      >
-        {totalDone} of {totalTasks || 220} tasks complete
+      {/* ── Summary text ─────────────────────────────────────────────────────── */}
+      <div style={{
+        textAlign: 'center', paddingTop: 22, paddingBottom: 2,
+        color: '#8a8580', fontSize: 13, letterSpacing: '0.04em',
+      }}>
+        {summaryText}
       </div>
 
-      {/* The tree SVG */}
+      {/* ── Tree SVG — fills viewport ─────────────────────────────────────────── */}
       <svg
         viewBox={`0 0 ${SVG_W} ${SVG_H}`}
         width="100%"
-        height="auto"
-        style={{ maxWidth: 600, display: 'block' }}
+        height="100vh"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: 'block', flex: '1 1 auto' }}
         onMouseLeave={() => setTooltip(null)}
       >
-        {/* ── Ground line ──────────────────────────────────────────────── */}
+        {/* Ground line */}
+        <line x1={180} y1={TRUNK_BOTTOM+18} x2={620} y2={TRUNK_BOTTOM+18}
+          stroke={BARE_SAND} strokeWidth={1} strokeLinecap="round"/>
+
+        {/* Roots */}
+        {[
+          `M ${TRUNK_X},${TRUNK_BOTTOM+2} C ${TRUNK_X-24},${TRUNK_BOTTOM+22} ${TRUNK_X-64},${TRUNK_BOTTOM+20} ${TRUNK_X-90},${TRUNK_BOTTOM+26}`,
+          `M ${TRUNK_X},${TRUNK_BOTTOM+2} C ${TRUNK_X+24},${TRUNK_BOTTOM+22} ${TRUNK_X+64},${TRUNK_BOTTOM+20} ${TRUNK_X+90},${TRUNK_BOTTOM+26}`,
+          `M ${TRUNK_X-20},${TRUNK_BOTTOM+10} C ${TRUNK_X-40},${TRUNK_BOTTOM+24} ${TRUNK_X-54},${TRUNK_BOTTOM+34} ${TRUNK_X-72},${TRUNK_BOTTOM+36}`,
+          `M ${TRUNK_X+20},${TRUNK_BOTTOM+10} C ${TRUNK_X+40},${TRUNK_BOTTOM+24} ${TRUNK_X+54},${TRUNK_BOTTOM+34} ${TRUNK_X+72},${TRUNK_BOTTOM+36}`,
+        ].map((d, i) => (
+          <path key={i} d={d} stroke={BARE_SAND}
+            strokeWidth={i < 2 ? 1.5 : 1} fill="none" strokeLinecap="round"/>
+        ))}
+
+        {/* Trunk */}
         <line
-          x1={160} y1={TRUNK_BOTTOM + 14}
-          x2={440} y2={TRUNK_BOTTOM + 14}
-          stroke="#d4c5b0"
-          strokeWidth={1}
-          strokeLinecap="round"
+          x1={TRUNK_X} y1={TRUNK_TOP} x2={TRUNK_X} y2={TRUNK_BOTTOM}
+          stroke={BARK} strokeWidth={4} strokeLinecap="round"
+          strokeDasharray={TRUNK_LENGTH} strokeDashoffset={0}
+          style={{ animation: `trunkDraw 1.4s cubic-bezier(0.4,0,0.2,1) forwards` }}
         />
 
-        {/* ── Roots (decorative) ────────────────────────────────────────── */}
-        <path
-          d={`M ${TRUNK_X},${TRUNK_BOTTOM + 2} C ${TRUNK_X - 20},${TRUNK_BOTTOM + 18} ${TRUNK_X - 50},${TRUNK_BOTTOM + 16} ${TRUNK_X - 70},${TRUNK_BOTTOM + 22}`}
-          stroke="#d4c5b0" strokeWidth={1.5} fill="none" strokeLinecap="round"
-        />
-        <path
-          d={`M ${TRUNK_X},${TRUNK_BOTTOM + 2} C ${TRUNK_X + 20},${TRUNK_BOTTOM + 18} ${TRUNK_X + 50},${TRUNK_BOTTOM + 16} ${TRUNK_X + 70},${TRUNK_BOTTOM + 22}`}
-          stroke="#d4c5b0" strokeWidth={1.5} fill="none" strokeLinecap="round"
-        />
-        <path
-          d={`M ${TRUNK_X - 15},${TRUNK_BOTTOM + 8} C ${TRUNK_X - 30},${TRUNK_BOTTOM + 20} ${TRUNK_X - 40},${TRUNK_BOTTOM + 28} ${TRUNK_X - 55},${TRUNK_BOTTOM + 30}`}
-          stroke="#d4c5b0" strokeWidth={1} fill="none" strokeLinecap="round"
-        />
-        <path
-          d={`M ${TRUNK_X + 15},${TRUNK_BOTTOM + 8} C ${TRUNK_X + 30},${TRUNK_BOTTOM + 20} ${TRUNK_X + 40},${TRUNK_BOTTOM + 28} ${TRUNK_X + 55},${TRUNK_BOTTOM + 30}`}
-          stroke="#d4c5b0" strokeWidth={1} fill="none" strokeLinecap="round"
-        />
-
-        {/* ── Trunk ─────────────────────────────────────────────────────── */}
-        <line
-          x1={TRUNK_X} y1={TRUNK_TOP}
-          x2={TRUNK_X} y2={TRUNK_BOTTOM}
-          stroke="#5c5853"
-          strokeWidth={3}
-          strokeLinecap="round"
-          strokeDasharray={TRUNK_LENGTH}
-          strokeDashoffset={0}
-          style={{
-            animation: `trunkDraw 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards`,
-          }}
-        />
-
-        {/* ── Branches, leaves, nodes ───────────────────────────────────── */}
-        {nodes.map(({ weekNum, weekLabel, y, stats, isDone, pct }) => {
-          const { done, total } = stats
-          const seed = weekNum * 137
-
-          // Branch length: 40–90px based on task count
-          const branchLen = total > 0
-            ? Math.round(40 + (total / maxWeekTasks) * 55)
-            : 30
-
-          // Leaf count along branch: 0 to 5 based on completion
-          const leafCount = total > 0 ? Math.max(1, Math.round(pct * 5)) : 0
-
-          // Left branch
-          const leftEnd = { x: TRUNK_X - branchLen, y: y - 4 }
-          const leftBranch = branchPath(TRUNK_X, y, leftEnd.x, leftEnd.y, 'left')
-          const leftLeaves = leafCount > 0
-            ? generateLeaves(TRUNK_X, y, leftEnd.x, leftEnd.y, leftBranch.cp1x, leftBranch.cp1y, leftBranch.cp2x, leftBranch.cp2y, leafCount, seed)
-            : []
-
-          // Right branch
-          const rightEnd = { x: TRUNK_X + branchLen, y: y - 4 }
-          const rightBranch = branchPath(TRUNK_X, y, rightEnd.x, rightEnd.y, 'right')
-          const rightLeaves = leafCount > 0
-            ? generateLeaves(TRUNK_X, y, rightEnd.x, rightEnd.y, rightBranch.cp1x, rightBranch.cp1y, rightBranch.cp2x, rightBranch.cp2y, leafCount, seed + 999)
-            : []
-
+        {/* ── Week nodes ──────────────────────────────────────────────────────── */}
+        {nodes.map(({ weekNum, weekLabel, y, stats, pct }) => {
+          const visible     = weekNum <= previewWeek
+          const isCurrent   = weekNum === previewWeek
           const isMilestone = MILESTONES[weekNum] !== undefined
-          const isHovMilestone = hoveredMilestone === weekNum
+          const isHovMs     = hoveredMs === weekNum
+
+          // Determine stage — weeks after previewWeek are forced bare
+          const displayPct   = visible ? pct   : 0
+          const displayTotal = visible ? stats.total : 0
+          const stage        = getStage(displayPct, visible, displayTotal > 0)
+          const br           = stageBranch(stage)
+          const leafCount    = stageLeafCount(stage)
+
+          const seed       = weekNum * 137
+          // Branch length scales with task count, but always render ghost branches
+          const branchLen  = Math.round(50 + (Math.max(stats.total, 1) / maxWeekTasks) * 75)
+
+          // Left branch + leaves
+          const lEnd  = { x: TRUNK_X - branchLen, y: y - 5 }
+          const lBr   = branchPath(TRUNK_X, y, lEnd.x, lEnd.y, 'left')
+          const lLeaves = leafCount > 0
+            ? generateLeaves(TRUNK_X, y, lEnd.x, lEnd.y, lBr.cp1x, lBr.cp1y, lBr.cp2x, lBr.cp2y, leafCount, seed)
+            : []
+
+          // Right branch + leaves
+          const rEnd  = { x: TRUNK_X + branchLen, y: y - 5 }
+          const rBr   = branchPath(TRUNK_X, y, rEnd.x, rEnd.y, 'right')
+          const rLeaves = leafCount > 0
+            ? generateLeaves(TRUNK_X, y, rEnd.x, rEnd.y, rBr.cp1x, rBr.cp1y, rBr.cp2x, rBr.cp2y, leafCount, seed + 999)
+            : []
+
+          // Node fill/stroke
+          const isBloomed = stage === 'bloomed'
+          const nodeFill =
+            isBloomed   ? CORAL :
+            stage === 'lush'    ? GREEN_FULL :
+            stage === 'growing' ? GREEN_BUD  :
+            stage === 'budding' ? BARE_SAND  : 'none'
+          const nodeStroke =
+            isBloomed   ? '#b86b50' :
+            stage === 'lush'    ? '#3d6b3a' :
+            stage === 'growing' ? '#5a8a4a' :
+            stage === 'budding' ? BARK       : BARE_SAND
+          const nodeR = isBloomed ? 9 : 6
+
+          // Glow on current week
+          const glow = isCurrent
+            ? { filter: 'drop-shadow(0 0 6px #c97d60)' } as React.CSSProperties
+            : {}
+
+          const nodeEvents = {
+            onMouseEnter: () => setTooltip({ x: TRUNK_X, y, week: weekLabel, done: stats.done, total: stats.total }),
+            onMouseLeave: () => setTooltip(null),
+            onClick:      () => onOwnerWeekFilter('All', weekLabel),
+          }
 
           return (
             <g key={weekLabel}>
-              {/* ── Branches ──────────────────────────────────────────── */}
-              {total > 0 && (
-                <>
-                  <path d={leftBranch.path} stroke="#8a8580" strokeWidth={1.5} fill="none" strokeLinecap="round" />
-                  <path d={rightBranch.path} stroke="#8a8580" strokeWidth={1.5} fill="none" strokeLinecap="round" />
+              {/* Ghost / live branches — always rendered, opacity drives presence */}
+              <path d={lBr.path} stroke={br.color} strokeWidth={br.width}
+                fill="none" strokeLinecap="round" opacity={br.opacity} className="g-branch"/>
+              <path d={rBr.path} stroke={br.color} strokeWidth={br.width}
+                fill="none" strokeLinecap="round" opacity={br.opacity} className="g-branch"/>
 
-                  {/* Filled dots along branch (done tasks feel) */}
-                  {done > 0 && (() => {
-                    const dotCount = Math.min(done, 4)
-                    const rand = seededRand(seed + 42)
-                    const dots = []
-                    for (let d = 0; d < dotCount; d++) {
-                      const t = 0.2 + (d / Math.max(dotCount - 1, 1)) * 0.6
-                      const [lx, ly] = bezierPoint(TRUNK_X, y, leftBranch.cp1x, leftBranch.cp1y, leftBranch.cp2x, leftBranch.cp2y, leftEnd.x, leftEnd.y, t)
-                      const [rx2, ry2] = bezierPoint(TRUNK_X, y, rightBranch.cp1x, rightBranch.cp1y, rightBranch.cp2x, rightBranch.cp2y, rightEnd.x, rightEnd.y, t)
-                      const r = 2 + rand() * 1.5
-                      dots.push(
-                        <circle key={`ld${d}`} cx={lx} cy={ly} r={r} fill="#c97d60" opacity={0.7} />,
-                        <circle key={`rd${d}`} cx={rx2} cy={ry2} r={r} fill="#c97d60" opacity={0.7} />,
-                      )
-                    }
-                    return dots
-                  })()}
-                </>
-              )}
-
-              {/* ── Leaves ─────────────────────────────────────────────── */}
-              {leavesVisible && [...leftLeaves, ...rightLeaves].map((leaf, li) => (
-                <ellipse
-                  key={li}
-                  cx={leaf.cx}
-                  cy={leaf.cy}
-                  rx={leaf.rx}
-                  ry={leaf.ry}
-                  fill={leaf.accent ? '#c97d60' : '#d4c5b0'}
-                  opacity={leaf.accent ? 0.4 : 0.75}
+              {/* Leaves */}
+              {[...lLeaves, ...rLeaves].map((leaf, li) => (
+                <ellipse key={li}
+                  cx={leaf.cx} cy={leaf.cy} rx={leaf.rx} ry={leaf.ry}
+                  fill={leafColor(stage, leaf.accent)}
+                  opacity={leaf.accent ? 0.72 : 0.88}
                   transform={`rotate(${leaf.angle}, ${leaf.cx}, ${leaf.cy})`}
-                  className="garden-leaf"
+                  className="g-leaf"
                   style={{ pointerEvents: 'none' }}
                 />
               ))}
 
-              {/* ── Milestone tick ─────────────────────────────────────── */}
+              {/* Milestone tick mark */}
               {isMilestone && (
-                <line
-                  x1={TRUNK_X - 6} y1={y}
-                  x2={TRUNK_X + 6} y2={y}
-                  stroke="#5c5853" strokeWidth={2} strokeLinecap="round"
-                />
+                <line x1={TRUNK_X-8} y1={y} x2={TRUNK_X+8} y2={y}
+                  stroke={BARK} strokeWidth={2} strokeLinecap="round"/>
               )}
 
-              {/* ── Milestone label ────────────────────────────────────── */}
+              {/* Milestone future-hint diamond */}
+              {isMilestone && !isBloomed && (
+                <path d={diamondPath(TRUNK_X, y, 5)}
+                  fill="none" stroke={BARE_SAND} strokeWidth={1} opacity={0.45}
+                  style={{ pointerEvents: 'none' }}/>
+              )}
+
+              {/* Milestone label */}
               {isMilestone && (
                 <g
-                  onMouseEnter={() => setHoveredMilestone(weekNum)}
-                  onMouseLeave={() => setHoveredMilestone(null)}
+                  onMouseEnter={() => setHoveredMs(weekNum)}
+                  onMouseLeave={() => setHoveredMs(null)}
                   style={{ cursor: 'default' }}
                 >
-                  <text
-                    x={TRUNK_X + 14}
-                    y={y + 4}
-                    className="milestone-label"
+                  <text x={TRUNK_X + 18} y={y + 4} className="ms-label"
                     style={{
-                      fontSize: isHovMilestone ? 12 : 11,
+                      fontSize: isHovMs ? 12 : 11,
                       fontWeight: 500,
-                      fill: isHovMilestone ? '#c97d60' : '#5c5853',
+                      fill: isHovMs ? CORAL : BARK,
                       fontFamily: "'Inter', system-ui, sans-serif",
-                      transition: 'font-size 0.15s, fill 0.15s',
-                    }}
-                  >
+                    }}>
                     {MILESTONES[weekNum]}
                   </text>
-                  {isHovMilestone && WEEK_DATES[`Week ${weekNum}`] && (
-                    <text
-                      x={TRUNK_X + 14}
-                      y={y + 16}
-                      style={{
-                        fontSize: 9,
-                        fill: '#8a8580',
-                        fontFamily: "'Inter', system-ui, sans-serif",
-                      }}
-                    >
+                  {isHovMs && WEEK_DATES[`Week ${weekNum}`] && (
+                    <text x={TRUNK_X + 18} y={y + 17}
+                      style={{ fontSize: 9, fill: '#8a8580', fontFamily: "'Inter', system-ui, sans-serif" }}>
                       {WEEK_DATES[`Week ${weekNum}`]}
                     </text>
                   )}
                 </g>
               )}
 
-              {/* ── Trunk node (clickable circle) ───────────────────────── */}
-              <circle
-                cx={TRUNK_X}
-                cy={y}
-                r={6}
-                fill={isDone ? '#c97d60' : pct > 0 ? '#e8c5b4' : '#e2d9d0'}
-                stroke={isDone ? '#c97d60' : '#8a8580'}
-                strokeWidth={1.5}
-                style={{ cursor: 'pointer' }}
-                onMouseEnter={() =>
-                  setTooltip({ x: TRUNK_X, y, week: weekLabel, done, total })
-                }
-                onMouseLeave={() => setTooltip(null)}
-                onClick={() => onOwnerWeekFilter('All', weekLabel)}
-              />
+              {/* Week number (left of branch end) */}
+              <text
+                x={TRUNK_X - branchLen - 10} y={y + 4}
+                textAnchor="end"
+                style={{ fontSize: 9, fill: '#b0a89e', fontFamily: "'Inter', system-ui, sans-serif", pointerEvents: 'none' }}
+              >
+                W{weekNum}
+              </text>
+
+              {/* Node — flower when milestone bloomed, circle otherwise */}
+              {isBloomed && isMilestone ? (
+                <path d={flowerPath(TRUNK_X, y, 9)} fill={CORAL} stroke="#b86b50" strokeWidth={1}
+                  className="g-node" style={{ cursor: 'pointer', ...glow }} {...nodeEvents}/>
+              ) : (
+                <circle cx={TRUNK_X} cy={y} r={nodeR}
+                  fill={nodeFill} stroke={nodeStroke} strokeWidth={1.5}
+                  className="g-node" style={{ cursor: 'pointer', ...glow }} {...nodeEvents}/>
+              )}
             </g>
           )
         })}
 
-        {/* ── Tooltip ───────────────────────────────────────────────────── */}
-        {tooltip && <Tooltip data={tooltip} />}
+        {/* Tooltip */}
+        {tooltip && <Tooltip data={tooltip}/>}
       </svg>
 
-      {/* Legend */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 20,
-          marginTop: 8,
-          fontSize: 11,
-          color: '#8a8580',
-          alignItems: 'center',
-        }}
-      >
+      {/* ── Legend ───────────────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', gap: 20, justifyContent: 'center',
+        paddingTop: 8, paddingBottom: 100,
+        fontSize: 11, color: '#8a8580', alignItems: 'center',
+      }}>
+        {[
+          { fill: 'none', stroke: BARE_SAND, label: 'Upcoming' },
+          { fill: GREEN_BUD,  stroke: 'none', label: 'In progress' },
+          { fill: GREEN_FULL, stroke: 'none', label: 'Lush' },
+          { fill: CORAL,      stroke: 'none', label: 'Complete' },
+        ].map(({ fill, stroke, label }) => (
+          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width={12} height={12}>
+              <circle cx={6} cy={6} r={5} fill={fill} stroke={stroke} strokeWidth={fill === 'none' ? 1.5 : 0}/>
+            </svg>
+            {label}
+          </span>
+        ))}
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <svg width={12} height={12}>
-            <circle cx={6} cy={6} r={5} fill="#e2d9d0" stroke="#8a8580" strokeWidth={1.5} />
+            <path d={diamondPath(6, 6, 4)} fill="none" stroke={BARE_SAND} strokeWidth={1}/>
           </svg>
-          Upcoming
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width={12} height={12}>
-            <circle cx={6} cy={6} r={5} fill="#c97d60" />
-          </svg>
-          Complete
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width={12} height={12}>
-            <circle cx={6} cy={6} r={3} fill="#c97d60" opacity={0.7} />
-          </svg>
-          Progress dots
+          Milestone ahead
         </span>
       </div>
-      <div style={{ marginTop: 8, fontSize: 11, color: '#b0a89e' }}>
-        Click any week node to filter board view
+
+      <div style={{ textAlign: 'center', paddingBottom: 6, fontSize: 11, color: '#b0a89e' }}>
+        Click any node to filter board view
+      </div>
+
+      {/* ── Time Scrubber — fixed at bottom ──────────────────────────────────── */}
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: 'rgba(248,245,242,0.97)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        borderTop: '1px solid #e2d9d0',
+        padding: '10px 28px 16px',
+        zIndex: 50,
+      }}>
+        {/* Label row */}
+        <div style={{
+          textAlign: 'center', marginBottom: 7, minHeight: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+        }}>
+          {isDragging && (
+            <span style={{ fontSize: 11, color: '#b0a89e', fontStyle: 'italic' }}>
+              Preview — release to return
+            </span>
+          )}
+          <span style={{ fontSize: 12, fontWeight: 500, color: '#5c5853' }}>
+            Week {previewWeek}{currentDateRange ? ` · ${currentDateRange}` : ''}
+          </span>
+          {previewWeek === actualWeek && !isDragging && !isPlaying && (
+            <span style={{ fontSize: 10, color: '#b0a89e', fontStyle: 'italic' }}>current</span>
+          )}
+        </div>
+
+        {/* Slider */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: 600, margin: '0 auto' }}>
+          <span style={{ fontSize: 11, color: '#b0a89e', whiteSpace: 'nowrap' }}>Week 1</span>
+          <input
+            type="range" min={1} max={12} value={previewWeek}
+            className="scrubber-range"
+            onChange={handleSliderChange}
+            onMouseUp={handleSliderUp}
+            onTouchEnd={handleSliderUp}
+            style={{ flex: 1 }}
+          />
+          <span style={{ fontSize: 11, color: '#b0a89e', whiteSpace: 'nowrap' }}>Week 12</span>
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 6 }}>
+          <button className={`scrub-btn${isPlaying ? ' playing' : ''}`} onClick={handlePlay}>
+            {isPlaying ? '⏸ Pause' : '▶ Play'}
+          </button>
+          <button className="scrub-btn" onClick={handleReset}>⏮ Reset</button>
+        </div>
       </div>
     </div>
   )

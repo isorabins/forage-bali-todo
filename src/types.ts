@@ -1,6 +1,6 @@
 export type TaskStatus = 'todo' | 'done'
 export type TaskPriority = 'high' | 'normal' | 'low'
-export type TaskOwner = 'Iso' | 'Yuka' | 'Carla' | 'Alex'
+export type TaskOwner = 'Iso' | 'Yuka' | 'Carla' | 'Noko'
 
 export interface Task {
   id: string
@@ -18,29 +18,29 @@ export interface Task {
   updated_at?: string
 }
 
-export const OWNERS: TaskOwner[] = ['Iso', 'Yuka', 'Carla', 'Alex']
+export const OWNERS: TaskOwner[] = ['Iso', 'Yuka', 'Carla', 'Noko']
 
 // Owner badge colors — warm terracotta palette
 export const OWNER_COLORS: Record<string, string> = {
-  Iso: '#4a3728',
+  Iso:  '#4a3728',
   Yuka: '#523530',
   Carla: '#4a4642',
-  Alex: '#3d3028',
+  Noko: '#3d6b5a',
 }
 
 export const OWNER_BG: Record<string, string> = {
-  Iso: '#f0ebe4',
+  Iso:  '#f0ebe4',
   Yuka: '#f2e8e4',
   Carla: '#efeeec',
-  Alex: '#f0ece6',
+  Noko: '#e0ede8',
 }
 
 // Dot colors for calendar chips
 export const OWNER_DOT: Record<string, string> = {
-  Iso: '#c97d60',
+  Iso:  '#c97d60',
   Yuka: '#b86b50',
   Carla: '#8a8580',
-  Alex: '#a87060',
+  Noko: '#5a9e8a',
 }
 
 export const STATUS_COLUMNS: { key: TaskStatus; label: string }[] = [
@@ -55,12 +55,12 @@ export const PRIORITY_LABELS: Record<string, string> = {
   medium: 'Normal',
 }
 
-// Left border colors for priority
+// Left border colors for priority — ONLY high gets the coral accent
 export const PRIORITY_BORDER: Record<string, string> = {
-  high: '#d4693a',
-  normal: '#e2d9d0',
-  low: 'transparent',
-  medium: '#e2d9d0',
+  high:   '#d4693a',
+  normal: 'transparent',
+  low:    'transparent',
+  medium: 'transparent',
 }
 
 // Normalize status for display (legacy 'up-next', 'in-progress', 'blocked' → 'todo')

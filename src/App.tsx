@@ -34,7 +34,7 @@ function App() {
 
   // Filters
   const [ownerFilter, setOwnerFilter] = useState<string>('All')
-  const [weekFilter, setWeekFilter] = useState<string>('All')
+  const [weekFilter, setWeekFilter] = useState<string>('Week 1')
   const [monthFilter, setMonthFilter] = useState<string>('All')
 
   const [messageApi, contextHolder] = message.useMessage()
@@ -278,7 +278,7 @@ function App() {
         >
           {/* Owner filter tabs */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {['All', 'Iso', 'Yuka', 'Carla', 'Alex'].map((o) => (
+            {['All', 'Iso', 'Yuka', 'Carla', 'Noko'].map((o) => (
               <button
                 key={o}
                 className={`owner-pill ${ownerFilter === o ? 'active' : ''}`}

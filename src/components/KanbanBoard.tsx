@@ -27,26 +27,26 @@ function Column({ id, label, tasks, onCardClick, collapsed = false }: ColumnProp
   const { setNodeRef, isOver } = useDroppable({ id })
 
   if (collapsed) {
-    // Slim sidebar — just the header, no cards
+    // Slim sidebar — header only; whole column is the drop target (no dashed box)
     return (
       <div
+        ref={setNodeRef}
         style={{
           width: 180,
           flexShrink: 0,
+          minHeight: 120,
           background: isOver ? '#fdf0eb' : 'transparent',
           borderRadius: 10,
           padding: '12px 12px',
           border: isOver ? '1px dashed var(--accent)' : '1px solid transparent',
           transition: 'background 0.15s, border-color 0.15s',
         }}
-        ref={setNodeRef}
       >
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            marginBottom: 10,
             padding: '0 2px',
           }}
         >
@@ -78,24 +78,6 @@ function Column({ id, label, tasks, onCardClick, collapsed = false }: ColumnProp
           >
             {tasks.length}
           </span>
-        </div>
-
-        {/* Drop target when empty */}
-        <div
-          style={{
-            borderRadius: 8,
-            border: '1.5px dashed var(--border)',
-            minHeight: 80,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--border)',
-            fontSize: 11,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-          }}
-        >
-          Drop here
         </div>
       </div>
     )
