@@ -177,7 +177,7 @@ function App() {
         style={{
           background: 'var(--bg)',
           borderBottom: '1px solid var(--border)',
-          padding: '14px 20px 12px',
+          padding: '18px 28px 16px',
           position: 'sticky',
           top: 0,
           zIndex: 100,
@@ -189,13 +189,13 @@ function App() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 12,
+            marginBottom: 16,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
             <span
               style={{
-                fontSize: 28,
+                fontSize: 32,
                 fontWeight: 700,
                 letterSpacing: '-0.03em',
                 color: 'var(--text-primary)',
@@ -206,16 +206,16 @@ function App() {
             </span>
             <span
               style={{
-                fontSize: 12,
+                fontSize: 13,
                 color: 'var(--text-muted)',
-                letterSpacing: '0.03em',
+                letterSpacing: '0.02em',
               }}
             >
               <span style={{ color: 'var(--coral)', fontWeight: 600 }}>{todoCount}</span> open · {doneCount} done
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             {/* Board / Calendar / Garden toggle */}
             <div className="view-toggle">
               <button
@@ -253,10 +253,10 @@ function App() {
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                padding: '4px 6px',
+                padding: '6px 8px',
                 color: 'var(--text-muted)',
-                fontSize: 11,
-                letterSpacing: '0.05em',
+                fontSize: 12,
+                letterSpacing: '0.06em',
                 textTransform: 'uppercase',
                 fontFamily: "'Inter', system-ui, sans-serif",
               }}
@@ -271,7 +271,7 @@ function App() {
         <div
           style={{
             display: 'flex',
-            gap: 8,
+            gap: 10,
             flexWrap: 'wrap',
             alignItems: 'center',
           }}
