@@ -20,21 +20,96 @@ interface ColumnProps {
   label: string
   tasks: Task[]
   onCardClick: (task: Task) => void
-  flexGrow?: number
+  collapsed?: boolean
 }
 
-function Column({ id, label, tasks, onCardClick, flexGrow = 1 }: ColumnProps) {
+function Column({ id, label, tasks, onCardClick, collapsed = false }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id })
+
+  if (collapsed) {
+    // Slim sidebar — just the header, no cards
+    return (
+      <div
+        style={{
+          width: 180,
+          flexShrink: 0,
+          background: isOver ? '#fdf0eb' : 'transparent',
+          borderRadius: 10,
+          padding: '12px 12px',
+          border: isOver ? '1px dashed var(--accent)' : '1px solid transparent',
+          transition: 'background 0.15s, border-color 0.15s',
+        }}
+        ref={setNodeRef}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 10,
+            padding: '0 2px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: 'var(--text-muted)',
+            }}
+          >
+            {label}
+          </span>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: 18,
+              height: 18,
+              borderRadius: 4,
+              background: 'var(--border)',
+              color: 'var(--text-muted)',
+              fontSize: 10,
+              fontWeight: 600,
+              padding: '0 4px',
+            }}
+          >
+            {tasks.length}
+          </span>
+        </div>
+
+        {/* Drop target when empty */}
+        <div
+          style={{
+            borderRadius: 8,
+            border: '1.5px dashed var(--border)',
+            minHeight: 80,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--border)',
+            fontSize: 11,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Drop here
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
       style={{
-        background: isOver ? '#f2f4ef' : 'transparent',
-        borderRadius: 8,
+        background: isOver ? '#fdf0eb' : 'transparent',
+        borderRadius: 10,
         padding: '10px 8px 12px',
-        flex: `${flexGrow} 0 0`,
-        minWidth: 220,
-        border: isOver ? '1px dashed #5a6847' : '1px solid transparent',
+        flex: '1 1 0',
+        minWidth: 280,
+        border: isOver ? '1px dashed var(--accent)' : '1px solid transparent',
         transition: 'background 0.15s, border-color 0.15s',
       }}
     >
@@ -50,7 +125,7 @@ function Column({ id, label, tasks, onCardClick, flexGrow = 1 }: ColumnProps) {
       >
         <span
           style={{
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 600,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
@@ -67,10 +142,10 @@ function Column({ id, label, tasks, onCardClick, flexGrow = 1 }: ColumnProps) {
             minWidth: 18,
             height: 18,
             borderRadius: 4,
-            background: 'var(--border)',
-            color: 'var(--text-secondary)',
+            background: id === 'todo' ? 'var(--coral-bg)' : 'var(--border)',
+            color: id === 'todo' ? 'var(--coral)' : 'var(--text-secondary)',
             fontSize: 10,
-            fontWeight: 600,
+            fontWeight: 700,
             padding: '0 4px',
           }}
         >
@@ -78,28 +153,30 @@ function Column({ id, label, tasks, onCardClick, flexGrow = 1 }: ColumnProps) {
         </span>
       </div>
 
-      {/* Cards */}
+      {/* 2-column card grid */}
       <div ref={setNodeRef} style={{ minHeight: 60 }}>
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-          {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onClick={onCardClick} />
-          ))}
+          {tasks.length > 0 ? (
+            <div className="card-grid">
+              {tasks.map((task) => (
+                <TaskCard key={task.id} task={task} onClick={onCardClick} />
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '28px 0 16px',
+                color: 'var(--border)',
+                fontSize: 11,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Nothing here
+            </div>
+          )}
         </SortableContext>
-
-        {tasks.length === 0 && (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '18px 0',
-              color: 'var(--border)',
-              fontSize: 11,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Empty
-          </div>
-        )}
       </div>
     </div>
   )
@@ -121,13 +198,9 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
   )
 
   const tasksByStatus = useMemo(() => {
-    const map: Record<TaskStatus, Task[]> = {
-      todo: [],
-      done: [],
-    }
+    const map: Record<TaskStatus, Task[]> = { todo: [], done: [] }
     for (const task of tasks) {
-      const col = normalizeStatus(task.status)
-      map[col].push(task)
+      map[normalizeStatus(task.status)].push(task)
     }
     return map
   }, [tasks])
@@ -145,14 +218,12 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
     const overId = over.id as string
     const taskId = active.id as string
 
-    // Dropped over a column
     const targetColumn = STATUS_COLUMNS.find((c) => c.key === overId)
     if (targetColumn) {
       await onStatusChange(taskId, targetColumn.key)
       return
     }
 
-    // Dropped over another task — find its column
     for (const col of STATUS_COLUMNS) {
       if (tasksByStatus[col.key].find((t) => t.id === overId)) {
         const task = tasks.find((t) => t.id === taskId)
@@ -175,10 +246,12 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
           letterSpacing: '0.06em',
         }}
       >
-        Loading...
+        Loading…
       </div>
     )
   }
+
+  const doneIsEmpty = tasksByStatus.done.length === 0
 
   return (
     <DndContext
@@ -190,21 +263,29 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
       <div
         style={{
           display: 'flex',
-          gap: 16,
-          padding: '4px 0 16px',
-          height: '100%',
+          gap: 24,
+          padding: '4px 0 24px',
+          alignItems: 'flex-start',
         }}
       >
-        {STATUS_COLUMNS.map((col) => (
-          <Column
-            key={col.key}
-            id={col.key}
-            label={col.label}
-            tasks={tasksByStatus[col.key]}
-            onCardClick={onTaskClick}
-            flexGrow={col.key === 'todo' ? 2 : 1}
-          />
-        ))}
+        {/* TO DO — always full flex */}
+        <Column
+          key="todo"
+          id="todo"
+          label="To Do"
+          tasks={tasksByStatus.todo}
+          onCardClick={onTaskClick}
+        />
+
+        {/* DONE — collapsed when empty */}
+        <Column
+          key="done"
+          id="done"
+          label="Done"
+          tasks={tasksByStatus.done}
+          onCardClick={onTaskClick}
+          collapsed={doneIsEmpty}
+        />
       </div>
 
       <DragOverlay>

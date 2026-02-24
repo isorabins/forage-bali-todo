@@ -58,10 +58,10 @@ function MiniProgressCircle({ pct, r, cx, cy }: { pct: number; r: number; cx: nu
   const empty = pct <= 0
 
   if (full) {
-    return <circle cx={cx} cy={cy} r={r} fill="#5a6847" />
+    return <circle cx={cx} cy={cy} r={r} fill="#c97d60" />
   }
   if (empty) {
-    return <circle cx={cx} cy={cy} r={r} fill="#e6ddd0" stroke="#bfa88a" strokeWidth={1} />
+    return <circle cx={cx} cy={cy} r={r} fill="#e2d9d0" stroke="#8a8580" strokeWidth={1} />
   }
 
   // Pie slice arc
@@ -76,10 +76,10 @@ function MiniProgressCircle({ pct, r, cx, cy }: { pct: number; r: number; cx: nu
 
   return (
     <g>
-      <circle cx={cx} cy={cy} r={r} fill="#e6ddd0" stroke="#bfa88a" strokeWidth={1} />
+      <circle cx={cx} cy={cy} r={r} fill="#e2d9d0" stroke="#8a8580" strokeWidth={1} />
       <path
         d={`M ${cx} ${cy} L ${startX} ${startY} A ${r} ${r} 0 ${largeArc} 1 ${x} ${y} Z`}
-        fill="#5a6847"
+        fill="#c97d60"
       />
     </g>
   )
@@ -137,7 +137,7 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
           fontSize: 13,
           fontVariant: 'small-caps',
           fontWeight: 600,
-          fill: '#5a6847',
+          fill: '#c97d60',
           letterSpacing: '0.1em',
           fontFamily: "'Inter', system-ui, sans-serif",
         }}
@@ -147,7 +147,7 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
 
       {/* ── Overall progress bar ─────────────────────────────────────── */}
       {/* background */}
-      <rect x={STEM_X - 40} y={26} width={80} height={3} rx={1.5} fill="#e6ddd0" />
+      <rect x={STEM_X - 40} y={26} width={80} height={3} rx={1.5} fill="#e2d9d0" />
       {/* fill */}
       <rect
         x={STEM_X - 40}
@@ -155,7 +155,7 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
         width={80 * overallPct}
         height={3}
         rx={1.5}
-        fill="#5a6847"
+        fill="#c97d60"
       />
       {/* pct label */}
       <text
@@ -164,7 +164,7 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
         textAnchor="middle"
         style={{
           fontSize: 10,
-          fill: '#8b7355',
+          fill: '#8a7060',
           fontFamily: "'Inter', system-ui, sans-serif",
         }}
       >
@@ -177,13 +177,13 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
         y1={stemTop}
         x2={STEM_X}
         y2={stemBottom}
-        stroke="#8b7355"
+        stroke="#8a7060"
         strokeWidth={2}
         strokeLinecap="round"
       />
 
       {/* ── Root dot ─────────────────────────────────────────────────── */}
-      <circle cx={STEM_X} cy={stemBottom} r={5} fill="#8b7355" />
+      <circle cx={STEM_X} cy={stemBottom} r={5} fill="#8a7060" />
 
       {/* ── Branches ─────────────────────────────────────────────────── */}
       {allWeeks.map((weekLabel, wi) => {
@@ -218,7 +218,7 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
               y1={branchY}
               x2={branchEndX}
               y2={branchY}
-              stroke="#8b7355"
+              stroke="#8a7060"
               strokeWidth={1.5}
               strokeLinecap="round"
             />
@@ -254,7 +254,7 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
                     width={CARD_W}
                     height={CARD_H}
                     rx={CARD_RX}
-                    fill="#8b7355"
+                    fill="#8a7060"
                     opacity={0.12}
                   />
                 )}
@@ -266,8 +266,8 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
                   width={CARD_W}
                   height={CARD_H}
                   rx={CARD_RX}
-                  fill={isHovered ? '#fff' : '#faf8f5'}
-                  stroke={isHovered ? '#bfa88a' : '#e6ddd0'}
+                  fill={isHovered ? '#fff' : '#f8f5f2'}
+                  stroke={isHovered ? '#8a8580' : '#e2d9d0'}
                   strokeWidth={1}
                 />
 
@@ -278,7 +278,7 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
                   style={{
                     fontSize: 9,
                     fontWeight: 600,
-                    fill: '#8b7355',
+                    fill: '#8a7060',
                     letterSpacing: '0.08em',
                     fontFamily: "'Inter', system-ui, sans-serif",
                     textTransform: 'uppercase',
@@ -293,7 +293,7 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
                   y={cardCY + 4}
                   style={{
                     fontSize: 11,
-                    fill: '#2d251d',
+                    fill: '#2d2a27',
                     fontFamily: "'Inter', system-ui, sans-serif",
                   }}
                 >
@@ -306,7 +306,7 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
                   y={cardCY + CARD_H / 2 - 6}
                   style={{
                     fontSize: 9,
-                    fill: '#8b7355',
+                    fill: '#8a7060',
                     fontFamily: "'Inter', system-ui, sans-serif",
                   }}
                 >
@@ -329,8 +329,8 @@ function OwnerTree({ owner, weeks, allWeeks, onOwnerWeekFilter }: OwnerTreeProps
                 cx={STEM_X}
                 cy={branchY}
                 r={3}
-                fill="#e6ddd0"
-                stroke="#bfa88a"
+                fill="#e2d9d0"
+                stroke="#8a8580"
                 strokeWidth={1}
               />
             )}
@@ -381,7 +381,7 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
   return (
     <div
       style={{
-        background: '#faf8f5',
+        background: '#f8f5f2',
         minHeight: '100vh',
         paddingBottom: 48,
         fontFamily: "'Inter', system-ui, sans-serif",
@@ -392,7 +392,7 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
         style={{
           textAlign: 'center',
           padding: '28px 16px 24px',
-          color: '#8b7355',
+          color: '#8a7060',
           fontSize: 13,
           letterSpacing: '0.04em',
         }}

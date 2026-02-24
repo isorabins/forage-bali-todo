@@ -29,9 +29,14 @@ export function TaskCard({ task, onClick, isDragging }: Props) {
   const ownerColor = owner ? OWNER_COLORS[owner] : undefined
   const ownerBg = owner ? OWNER_BG[owner] : undefined
   const priority = task.priority === 'medium' ? 'normal' : (task.priority || 'normal')
-  const borderLeft = PRIORITY_BORDER[priority] || 'transparent'
+  const borderColor = PRIORITY_BORDER[priority] || 'transparent'
 
   const title = stripEmoji(task.title)
+
+  // Compact week label: "Week 3" → "W3"
+  const weekShort = task.week
+    ? task.week.replace(/week\s*/i, 'W')
+    : null
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
@@ -40,15 +45,23 @@ export function TaskCard({ task, onClick, isDragging }: Props) {
         onClick={() => onClick(task)}
         style={{
           cursor: isDragging ? 'grabbing' : isSortableDragging ? 'grabbing' : 'grab',
-          borderLeft: `3px solid ${borderLeft}`,
+          borderLeft: `3px solid ${borderColor}`,
           boxShadow: isSortableDragging
             ? '0 8px 24px rgba(0,0,0,0.12)'
-            : '0 1px 3px rgba(0,0,0,0.06)',
+            : '0 1px 2px rgba(0,0,0,0.05)',
         }}
       >
-        {/* Owner badge */}
-        {owner && (
-          <div style={{ marginBottom: 7 }}>
+        {/* Top row: owner badge + week pill */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: owner || weekShort ? 7 : 0,
+            gap: 6,
+          }}
+        >
+          {owner && (
             <span
               style={{
                 display: 'inline-block',
@@ -58,79 +71,50 @@ export function TaskCard({ task, onClick, isDragging }: Props) {
                 color: ownerColor,
                 fontSize: 11,
                 fontWeight: 500,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
+                letterSpacing: '0.01em',
+                whiteSpace: 'nowrap',
               }}
             >
               {owner}
             </span>
-          </div>
-        )}
+          )}
+          {weekShort && (
+            <span
+              style={{
+                display: 'inline-block',
+                padding: '1px 6px',
+                borderRadius: 4,
+                background: 'var(--bg)',
+                color: 'var(--text-muted)',
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                flexShrink: 0,
+                marginLeft: 'auto',
+              }}
+            >
+              {weekShort}
+            </span>
+          )}
+        </div>
 
         {/* Title */}
         <div
           style={{
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: 500,
-            lineHeight: 1.45,
+            lineHeight: 1.4,
             color: 'var(--text-primary)',
-            letterSpacing: '-0.01em',
+            letterSpacing: '-0.005em',
           }}
         >
           {title}
         </div>
 
-        {/* Meta: week / month */}
-        {(task.week || task.month) && (
-          <div
-            style={{
-              marginTop: 8,
-              display: 'flex',
-              gap: 6,
-              flexWrap: 'wrap',
-            }}
-          >
-            {task.week && (
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 500,
-                  letterSpacing: '0.07em',
-                  textTransform: 'uppercase',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                {task.week}
-              </span>
-            )}
-            {task.week && task.month && (
-              <span style={{ color: 'var(--border)', fontSize: 10 }}>·</span>
-            )}
-            {task.month && (
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 500,
-                  letterSpacing: '0.07em',
-                  textTransform: 'uppercase',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                {task.month}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Due date */}
+        {/* Due date (optional) */}
         {task.due_date && (
-          <div style={{ marginTop: 5 }}>
-            <span
-              style={{
-                fontSize: 11,
-                color: 'var(--text-muted)',
-              }}
-            >
+          <div style={{ marginTop: 6 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               {task.due_date}
             </span>
           </div>

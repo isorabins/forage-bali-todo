@@ -1,12 +1,15 @@
 :root {
-  --bg: #faf8f5;
+  --bg: #f8f5f2;
   --surface: #ffffff;
-  --border: #e6ddd0;
-  --text-primary: #2d251d;
-  --text-secondary: #8b7355;
-  --text-muted: #bfa88a;
-  --accent: #5a6847;
-  --accent-hover: #475339;
+  --border: #e2d9d0;
+  --text-primary: #2d2a27;
+  --text-secondary: #5c5853;
+  --text-muted: #8a8580;
+  --accent: #c97d60;
+  --accent-hover: #b56a4e;
+  --coral: #d4693a;
+  --coral-bg: #fdf0eb;
+  --radius: 1rem;
 }
 
 *, *::before, *::after {
@@ -40,7 +43,7 @@ body {
   border-radius: 2px;
 }
 
-/* Override Ant Design blue with moss */
+/* Override Ant Design tokens with terracotta */
 .ant-btn-primary {
   background-color: var(--accent) !important;
   border-color: var(--accent) !important;
@@ -59,80 +62,83 @@ body {
   80% { transform: translateX(4px); }
 }
 
-/* Add Task header button */
+/* ── Add Task button ─────────────────────────────────────────── */
 .add-task-btn {
-  padding: 8px 18px;
+  padding: 6px 14px;
   background: var(--accent);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 0.5rem;
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+  transition: all 0.15s ease;
   white-space: nowrap;
-  box-shadow: 0 1px 4px rgba(90, 104, 71, 0.25);
+  box-shadow: 0 1px 3px rgba(201, 125, 96, 0.25);
 }
 
 .add-task-btn:hover {
   background: var(--accent-hover);
-  box-shadow: 0 3px 10px rgba(90, 104, 71, 0.35);
+  box-shadow: 0 3px 10px rgba(201, 125, 96, 0.35);
   transform: translateY(-1px);
 }
 
 .add-task-btn:active {
   transform: translateY(0);
-  box-shadow: 0 1px 3px rgba(90, 104, 71, 0.2);
+  box-shadow: 0 1px 2px rgba(201, 125, 96, 0.18);
 }
 
-/* View toggle buttons */
+/* ── View toggle — segmented control ────────────────────────── */
 .view-toggle {
   display: flex;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
+  gap: 2px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 3px;
 }
 
 .view-toggle button {
-  padding: 5px 14px;
+  padding: 4px 13px;
   background: transparent;
   border: none;
+  border-radius: 0.5rem;
   cursor: pointer;
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
-  transition: all 0.15s;
+  transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .view-toggle button.active {
-  background: var(--accent);
-  color: white;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.09);
 }
 
 .view-toggle button:hover:not(.active) {
-  background: var(--border);
   color: var(--text-secondary);
 }
 
-/* Owner filter tabs */
+/* ── Owner filter pills ──────────────────────────────────────── */
 .owner-pill {
-  padding: 10px 20px;
-  border-radius: 6px;
+  padding: 5px 14px;
+  border-radius: 0.5rem;
   border: 1px solid var(--border);
   cursor: pointer;
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   background: transparent;
   color: var(--text-muted);
-  transition: all 0.15s;
+  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
@@ -148,127 +154,181 @@ body {
   font-weight: 600;
 }
 
-/* Task card */
+/* ── Task card ───────────────────────────────────────────────── */
 .task-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px 14px;
-  margin-bottom: 8px;
+  border-radius: 0.6rem;
+  padding: 10px 14px;
   cursor: grab;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-  transition: box-shadow 0.2s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transition: all 0.15s ease;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .task-card:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
 }
 
 .task-card:active {
   cursor: grabbing;
+  transform: translateY(0);
 }
 
-/* Calendar styles */
-.calendar-grid {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.calendar-week-row {
+/* ── Kanban 2-col card grid ──────────────────────────────────── */
+.card-grid {
   display: grid;
-  grid-template-columns: 140px 1fr;
-  border-bottom: 1px solid var(--border);
-  min-height: 48px;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: start;
 }
 
-.calendar-week-row:nth-child(even) {
-  background: var(--bg);
+@media (max-width: 700px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.calendar-week-row:nth-child(odd) {
-  background: var(--surface);
-}
-
-.calendar-week-label {
-  padding: 10px 14px;
-  border-right: 1px solid var(--border);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+/* ── Calendar ────────────────────────────────────────────────── */
+.cal-nav {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
 }
 
-.calendar-week-label .week-num {
-  color: var(--text-secondary);
-}
-
-.calendar-week-label .week-dates {
-  color: var(--text-muted);
-  font-weight: 400;
-}
-
-.calendar-tasks {
-  padding: 8px 12px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.calendar-task-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px 3px 7px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
+.cal-nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 0.5rem;
   border: 1px solid var(--border);
   background: var(--surface);
-  color: var(--text-primary);
-  max-width: 180px;
-  transition: box-shadow 0.15s;
-}
-
-.calendar-task-chip:hover {
-  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
-}
-
-.calendar-task-chip .owner-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
-.calendar-task-chip .chip-title {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.cal-nav-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(201, 125, 96, 0.18);
+}
+
+.cal-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cal-nav-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  min-width: 200px;
+  text-align: center;
+}
+
+.cal-nav-dates {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.cal-owner-section {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cal-owner-section:last-child {
+  border-bottom: none;
+}
+
+.cal-owner-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.cal-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cal-card {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  width: 100%;
+  font-family: 'Inter', system-ui, sans-serif;
+  max-width: 480px;
+  border-left-width: 3px;
+}
+
+.cal-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  transform: translateY(-1px);
+}
+
+.cal-card-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.cal-show-more {
+  background: none;
+  border: none;
+  padding: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  transition: color 0.15s ease;
+}
+
+.cal-show-more:hover {
+  color: var(--accent);
+}
+
+.cal-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+  padding: 4px 0;
 }
 
 @media (max-width: 600px) {
-  .calendar-week-row {
-    grid-template-columns: 1fr;
+  .cal-nav-label {
+    min-width: 140px;
+    font-size: 14px;
   }
-  .calendar-week-label {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    flex-direction: row;
-    gap: 6px;
-    padding: 8px 12px;
+  .cal-owner-section {
+    padding: 16px;
   }
-  .calendar-week-label .week-dates::before {
-    content: '·';
-    margin-right: 6px;
-    color: var(--border);
+  .cal-card {
+    max-width: 100%;
   }
 }
