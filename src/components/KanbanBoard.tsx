@@ -10,80 +10,76 @@ import {
   useDroppable,
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { Badge, Typography, Spin } from 'antd'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { Task, TaskStatus } from '../types'
 import { STATUS_COLUMNS, normalizeStatus } from '../types'
 import { TaskCard } from './TaskCard'
 
-const { Text } = Typography
-
 interface ColumnProps {
   id: TaskStatus
   label: string
-  color: string
   tasks: Task[]
   onCardClick: (task: Task) => void
 }
 
-function Column({ id, label, color, tasks, onCardClick }: ColumnProps) {
+function Column({ id, label, tasks, onCardClick }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id })
 
   return (
     <div
       style={{
-        background: isOver ? '#f0f7ff' : '#f8f9fa',
-        borderRadius: 12,
-        padding: '12px 10px',
+        background: isOver ? '#f2f4ef' : 'transparent',
+        borderRadius: 8,
+        padding: '10px 8px 12px',
         minWidth: 260,
         flex: '1 0 260px',
         maxWidth: 320,
-        border: isOver ? '2px dashed #1677ff' : '2px solid transparent',
+        border: isOver ? '1px dashed #5a6847' : '1px solid transparent',
         transition: 'background 0.15s, border-color 0.15s',
       }}
     >
+      {/* Column header */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
           marginBottom: 12,
-          padding: '0 2px',
+          padding: '0 4px',
         }}
       >
         <span
           style={{
-            width: 10,
-            height: 10,
-            borderRadius: '50%',
-            background: color,
-            flexShrink: 0,
-          }}
-        />
-        <Text strong style={{ fontSize: 13, color: '#374151' }}>
-          {label}
-        </Text>
-        <Badge
-          count={tasks.length}
-          style={{
-            backgroundColor: '#e5e7eb',
-            color: '#6b7280',
             fontSize: 11,
             fontWeight: 600,
-            boxShadow: 'none',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: 'var(--text-muted)',
           }}
-        />
+        >
+          {label}
+        </span>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: 18,
+            height: 18,
+            borderRadius: 4,
+            background: 'var(--border)',
+            color: 'var(--text-secondary)',
+            fontSize: 10,
+            fontWeight: 600,
+            padding: '0 4px',
+          }}
+        >
+          {tasks.length}
+        </span>
       </div>
 
-      <div
-        ref={setNodeRef}
-        style={{
-          minHeight: 80,
-        }}
-      >
+      {/* Cards */}
+      <div ref={setNodeRef} style={{ minHeight: 60 }}>
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
             <TaskCard key={task.id} task={task} onClick={onCardClick} />
@@ -94,12 +90,14 @@ function Column({ id, label, color, tasks, onCardClick }: ColumnProps) {
           <div
             style={{
               textAlign: 'center',
-              padding: '20px 0',
-              color: '#d1d5db',
-              fontSize: 12,
+              padding: '18px 0',
+              color: 'var(--border)',
+              fontSize: 11,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
             }}
           >
-            Drop tasks here
+            Empty
           </div>
         )}
       </div>
@@ -118,12 +116,8 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
   const [activeTask, setActiveTask] = useState<Task | null>(null)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 4 },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 200, tolerance: 5 },
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   )
 
   const tasksByStatus = useMemo(() => {
@@ -153,14 +147,14 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
     const overId = over.id as string
     const taskId = active.id as string
 
-    // Check if dropped over a column
+    // Dropped over a column
     const targetColumn = STATUS_COLUMNS.find((c) => c.key === overId)
     if (targetColumn) {
       await onStatusChange(taskId, targetColumn.key)
       return
     }
 
-    // Dropped over another task — find which column that task is in
+    // Dropped over another task — find its column
     for (const col of STATUS_COLUMNS) {
       if (tasksByStatus[col.key].find((t) => t.id === overId)) {
         const task = tasks.find((t) => t.id === taskId)
@@ -174,8 +168,16 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', paddingTop: 80 }}>
-        <Spin size="large" />
+      <div
+        style={{
+          textAlign: 'center',
+          paddingTop: 80,
+          color: 'var(--text-muted)',
+          fontSize: 13,
+          letterSpacing: '0.06em',
+        }}
+      >
+        Loading...
       </div>
     )
   }
@@ -201,7 +203,6 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
             key={col.key}
             id={col.key}
             label={col.label}
-            color={col.color}
             tasks={tasksByStatus[col.key]}
             onCardClick={onTaskClick}
           />
@@ -210,7 +211,7 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
 
       <DragOverlay>
         {activeTask ? (
-          <div style={{ transform: 'rotate(2deg)' }}>
+          <div style={{ transform: 'rotate(1.5deg)', opacity: 0.95 }}>
             <TaskCard task={activeTask} onClick={() => {}} isDragging />
           </div>
         ) : null}

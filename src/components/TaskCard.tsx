@@ -1,10 +1,7 @@
-import { Card, Tag, Typography } from 'antd'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { Task } from '../types'
-import { OWNER_COLORS, OWNER_BG, PRIORITY_COLORS, getOwner } from '../types'
-
-const { Text } = Typography
+import { OWNER_COLORS, OWNER_BG, PRIORITY_BORDER, getOwner, stripEmoji } from '../types'
 
 interface Props {
   task: Task
@@ -25,140 +22,120 @@ export function TaskCard({ task, onClick, isDragging }: Props) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isSortableDragging ? 0.4 : 1,
+    opacity: isSortableDragging ? 0.3 : 1,
   }
 
   const owner = getOwner(task)
-  const ownerColor = owner ? OWNER_COLORS[owner] : '#8c8c8c'
-  const ownerBg = owner ? OWNER_BG[owner] : '#fafafa'
-  const priority = task.priority === 'medium' ? 'normal' : task.priority
-  const priorityColor = PRIORITY_COLORS[priority] || '#8c8c8c'
+  const ownerColor = owner ? OWNER_COLORS[owner] : undefined
+  const ownerBg = owner ? OWNER_BG[owner] : undefined
+  const priority = task.priority === 'medium' ? 'normal' : (task.priority || 'normal')
+  const borderLeft = PRIORITY_BORDER[priority] || 'transparent'
+
+  const title = stripEmoji(task.title)
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Card
-        size="small"
+      <div
+        className="task-card"
         onClick={() => onClick(task)}
         style={{
-          marginBottom: 8,
-          borderRadius: 10,
-          cursor: isDragging ? 'grabbing' : 'grab',
-          border: `1px solid ${isSortableDragging ? ownerColor : '#f0f0f0'}`,
+          cursor: isDragging ? 'grabbing' : isSortableDragging ? 'grabbing' : 'grab',
+          borderLeft: `3px solid ${borderLeft}`,
           boxShadow: isSortableDragging
-            ? `0 8px 24px rgba(0,0,0,0.15)`
-            : '0 1px 4px rgba(0,0,0,0.06)',
-          transition: 'box-shadow 0.2s, border-color 0.2s',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-          borderLeft: `3px solid ${priorityColor}`,
+            ? '0 8px 24px rgba(0,0,0,0.12)'
+            : '0 1px 3px rgba(0,0,0,0.06)',
         }}
-        styles={{
-          body: { padding: '10px 12px' },
-        }}
-        hoverable
       >
-        {/* Header: owner badge + priority dot */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 6,
-          }}
-        >
-          {owner ? (
+        {/* Owner badge */}
+        {owner && (
+          <div style={{ marginBottom: 7 }}>
             <span
               style={{
                 display: 'inline-block',
-                padding: '1px 8px',
-                borderRadius: 10,
+                padding: '2px 8px',
+                borderRadius: 20,
                 background: ownerBg,
                 color: ownerColor,
                 fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: 0.3,
-                border: `1px solid ${ownerColor}22`,
+                fontWeight: 500,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
               }}
             >
               {owner}
             </span>
-          ) : (
-            <span />
-          )}
-
-          <span
-            style={{
-              display: 'inline-block',
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: priorityColor,
-              flexShrink: 0,
-            }}
-            title={priority}
-          />
-        </div>
+          </div>
+        )}
 
         {/* Title */}
-        <Text
+        <div
           style={{
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: 500,
-            lineHeight: 1.4,
-            display: 'block',
-            color: '#1a1a1a',
+            lineHeight: 1.45,
+            color: 'var(--text-primary)',
+            letterSpacing: '-0.01em',
           }}
         >
-          {task.title}
-        </Text>
+          {title}
+        </div>
 
-        {/* Week/month tags */}
+        {/* Meta: week / month */}
         {(task.week || task.month) && (
-          <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          <div
+            style={{
+              marginTop: 8,
+              display: 'flex',
+              gap: 6,
+              flexWrap: 'wrap',
+            }}
+          >
             {task.week && (
-              <Tag
+              <span
                 style={{
                   fontSize: 10,
-                  padding: '0 5px',
-                  borderRadius: 4,
-                  margin: 0,
-                  lineHeight: '18px',
-                  background: '#f5f5f5',
-                  border: '1px solid #e0e0e0',
-                  color: '#595959',
+                  fontWeight: 500,
+                  letterSpacing: '0.07em',
+                  textTransform: 'uppercase',
+                  color: 'var(--text-muted)',
                 }}
               >
                 {task.week}
-              </Tag>
+              </span>
+            )}
+            {task.week && task.month && (
+              <span style={{ color: 'var(--border)', fontSize: 10 }}>·</span>
             )}
             {task.month && (
-              <Tag
+              <span
                 style={{
                   fontSize: 10,
-                  padding: '0 5px',
-                  borderRadius: 4,
-                  margin: 0,
-                  lineHeight: '18px',
-                  background: '#f0f5ff',
-                  border: '1px solid #d6e4ff',
-                  color: '#1d4ed8',
+                  fontWeight: 500,
+                  letterSpacing: '0.07em',
+                  textTransform: 'uppercase',
+                  color: 'var(--text-muted)',
                 }}
               >
                 {task.month}
-              </Tag>
+              </span>
             )}
           </div>
         )}
 
-        {/* Due date if set */}
+        {/* Due date */}
         {task.due_date && (
-          <div style={{ marginTop: 4 }}>
-            <Text style={{ fontSize: 11, color: '#8c8c8c' }}>
-              📅 {task.due_date}
-            </Text>
+          <div style={{ marginTop: 5 }}>
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--text-muted)',
+              }}
+            >
+              {task.due_date}
+            </span>
           </div>
         )}
-      </Card>
+      </div>
     </div>
   )
 }

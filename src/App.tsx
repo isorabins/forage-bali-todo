@@ -1,22 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import {
-  ConfigProvider,
-  Button,
-  Typography,
-  Select,
-  message,
-  FloatButton,
-  theme,
-} from 'antd'
-import { PlusOutlined, LogoutOutlined, FilterOutlined } from '@ant-design/icons'
+import { ConfigProvider, Select, message, theme } from 'antd'
 import { supabase } from './lib/supabase'
 import type { Task, TaskStatus } from './types'
 import { getOwner, normalizeStatus } from './types'
 import { PasswordGate, isAuthenticated } from './components/PasswordGate'
 import { KanbanBoard } from './components/KanbanBoard'
 import { TaskModal } from './components/TaskModal'
-
-const { Title, Text } = Typography
+import { CalendarView } from './components/CalendarView'
 
 // Collect unique week/month values from tasks
 function getFilterOptions(tasks: Task[], field: 'week' | 'month') {
@@ -24,7 +14,6 @@ function getFilterOptions(tasks: Task[], field: 'week' | 'month') {
   for (const t of tasks) {
     if (t[field]) vals.add(t[field]!)
   }
-  // Sort: "Week 1", "Week 2", etc. or "Month 1", "Month 2"
   return Array.from(vals).sort((a, b) => {
     const numA = parseInt(a.replace(/\D/g, '')) || 0
     const numB = parseInt(b.replace(/\D/g, '')) || 0
@@ -32,12 +21,15 @@ function getFilterOptions(tasks: Task[], field: 'week' | 'month') {
   })
 }
 
+type AppView = 'board' | 'calendar'
+
 function App() {
   const [authed, setAuthed] = useState(isAuthenticated())
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
+  const [view, setView] = useState<AppView>('board')
 
   // Filters
   const [ownerFilter, setOwnerFilter] = useState<string>('All')
@@ -46,7 +38,6 @@ function App() {
 
   const [messageApi, contextHolder] = message.useMessage()
 
-  // Load tasks from Supabase
   const loadTasks = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase
@@ -76,11 +67,10 @@ function App() {
         loadTasks()
       })
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
   }, [authed, loadTasks])
 
-  // Filter tasks
+  // Filter tasks (for board view)
   const filteredTasks = tasks.filter((t) => {
     if (ownerFilter !== 'All' && getOwner(t) !== ownerFilter) return false
     if (weekFilter !== 'All' && t.week !== weekFilter) return false
@@ -91,10 +81,8 @@ function App() {
   const weekOptions = getFilterOptions(tasks, 'week')
   const monthOptions = getFilterOptions(tasks, 'month')
 
-  // Save task (create or update)
   const handleSave = async (data: Partial<Task>) => {
     if (editTask) {
-      // Update
       const { error } = await supabase
         .from('tasks')
         .update({
@@ -110,13 +98,9 @@ function App() {
         })
         .eq('id', editTask.id)
 
-      if (error) {
-        messageApi.error('Failed to update task')
-        throw error
-      }
+      if (error) { messageApi.error('Failed to update task'); throw error }
       messageApi.success('Task updated')
     } else {
-      // Create
       const { error } = await supabase.from('tasks').insert({
         title: data.title,
         description: data.description || null,
@@ -129,29 +113,20 @@ function App() {
         project: 'forage-bali',
       })
 
-      if (error) {
-        messageApi.error('Failed to create task')
-        throw error
-      }
-      messageApi.success('Task added!')
+      if (error) { messageApi.error('Failed to create task'); throw error }
+      messageApi.success('Task added')
     }
     await loadTasks()
   }
 
-  // Delete task
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from('tasks').delete().eq('id', id)
-    if (error) {
-      messageApi.error('Failed to delete task')
-      throw error
-    }
+    if (error) { messageApi.error('Failed to delete task'); throw error }
     messageApi.success('Task deleted')
     await loadTasks()
   }
 
-  // Drag-and-drop status change
   const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
-    // Optimistic update
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
     )
@@ -160,36 +135,21 @@ function App() {
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', taskId)
 
-    if (error) {
-      messageApi.error('Failed to move task')
-      await loadTasks() // revert
-    }
+    if (error) { messageApi.error('Failed to move task'); await loadTasks() }
   }
 
-  const openNewTask = () => {
-    setEditTask(null)
-    setModalOpen(true)
-  }
-
-  const openEditTask = (task: Task) => {
-    setEditTask(task)
-    setModalOpen(true)
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem('foragebali_auth')
-    setAuthed(false)
-  }
+  const openNewTask = () => { setEditTask(null); setModalOpen(true) }
+  const openEditTask = (task: Task) => { setEditTask(task); setModalOpen(true) }
+  const handleLogout = () => { localStorage.removeItem('foragebali_auth'); setAuthed(false) }
 
   if (!authed) {
     return (
-      <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm }}>
+      <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm, token: { colorPrimary: '#5a6847' } }}>
         <PasswordGate onUnlock={() => setAuthed(true)} />
       </ConfigProvider>
     )
   }
 
-  // Stats
   const todoCount = filteredTasks.filter((t) => normalizeStatus(t.status) === 'todo').length
   const doneCount = filteredTasks.filter((t) => normalizeStatus(t.status) === 'done').length
 
@@ -198,53 +158,100 @@ function App() {
       theme={{
         algorithm: theme.defaultAlgorithm,
         token: {
-          colorPrimary: '#1677ff',
-          borderRadius: 8,
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          colorPrimary: '#5a6847',
+          borderRadius: 6,
+          fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+          colorBorder: '#e6ddd0',
+          colorBgContainer: '#ffffff',
+          colorText: '#2d251d',
+          colorTextSecondary: '#8b7355',
+          colorTextPlaceholder: '#bfa88a',
         },
       }}
     >
       {contextHolder}
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div
         style={{
-          background: 'white',
-          borderBottom: '1px solid #f0f0f0',
-          padding: '12px 16px 8px',
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+          padding: '12px 16px 10px',
           position: 'sticky',
           top: 0,
           zIndex: 100,
-          boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
         }}
       >
+        {/* Top row: wordmark + view toggle + logout */}
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 10,
+            marginBottom: 12,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 20 }}>🌿</span>
-            <Title level={5} style={{ margin: 0, color: '#111' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span
+              style={{
+                fontSize: 16,
+                fontWeight: 500,
+                letterSpacing: '-0.02em',
+                color: 'var(--text-primary)',
+              }}
+            >
               Forage Bali
-            </Title>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {todoCount} left · {doneCount} done
-            </Text>
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {todoCount} open · {doneCount} done
+            </span>
           </div>
-          <Button
-            type="text"
-            size="small"
-            icon={<LogoutOutlined />}
-            onClick={handleLogout}
-            style={{ color: '#8c8c8c' }}
-          />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Board / Calendar toggle */}
+            <div className="view-toggle">
+              <button
+                className={view === 'board' ? 'active' : ''}
+                onClick={() => setView('board')}
+              >
+                Board
+              </button>
+              <button
+                className={view === 'calendar' ? 'active' : ''}
+                onClick={() => setView('calendar')}
+              >
+                Calendar
+              </button>
+            </div>
+
+            {/* Logout */}
+            <button
+              onClick={handleLogout}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 6px',
+                color: 'var(--text-muted)',
+                fontSize: 11,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                fontFamily: "'Inter', system-ui, sans-serif",
+              }}
+              title="Sign out"
+            >
+              Out
+            </button>
+          </div>
         </div>
 
-        {/* Filters */}
+        {/* Filter bar */}
         <div
           style={{
             display: 'flex',
@@ -253,41 +260,30 @@ function App() {
             alignItems: 'center',
           }}
         >
-          <FilterOutlined style={{ color: '#8c8c8c', fontSize: 13 }} />
-
-          {/* Owner filter */}
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {/* Owner filter pills */}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
             {['All', 'Iso', 'Yuka', 'Carla', 'Alex'].map((o) => (
               <button
                 key={o}
+                className={`owner-pill ${ownerFilter === o ? 'active' : ''}`}
                 onClick={() => setOwnerFilter(o)}
-                style={{
-                  padding: '3px 10px',
-                  borderRadius: 12,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: ownerFilter === o ? 600 : 400,
-                  background:
-                    ownerFilter === o
-                      ? o === 'All'
-                        ? '#1677ff'
-                        : o === 'Iso'
-                        ? '#1677ff'
-                        : o === 'Yuka'
-                        ? '#52c41a'
-                        : o === 'Carla'
-                        ? '#fa8c16'
-                        : '#722ed1'
-                      : '#f0f0f0',
-                  color: ownerFilter === o ? 'white' : '#595959',
-                  transition: 'all 0.15s',
-                }}
               >
                 {o}
               </button>
             ))}
           </div>
+
+          {/* Divider */}
+          {(weekOptions.length > 0 || monthOptions.length > 0) && (
+            <div
+              style={{
+                width: 1,
+                height: 18,
+                background: 'var(--border)',
+                margin: '0 2px',
+              }}
+            />
+          )}
 
           {/* Week filter */}
           {weekOptions.length > 0 && (
@@ -295,9 +291,9 @@ function App() {
               size="small"
               value={weekFilter}
               onChange={setWeekFilter}
-              style={{ minWidth: 90 }}
+              style={{ minWidth: 96 }}
               options={[
-                { value: 'All', label: 'All Weeks' },
+                { value: 'All', label: 'All weeks' },
                 ...weekOptions.map((w) => ({ value: w, label: w })),
               ]}
             />
@@ -309,9 +305,9 @@ function App() {
               size="small"
               value={monthFilter}
               onChange={setMonthFilter}
-              style={{ minWidth: 100 }}
+              style={{ minWidth: 104 }}
               options={[
-                { value: 'All', label: 'All Months' },
+                { value: 'All', label: 'All months' },
                 ...monthOptions.map((m) => ({ value: m, label: m })),
               ]}
             />
@@ -319,38 +315,71 @@ function App() {
         </div>
       </div>
 
-      {/* Board */}
-      <div style={{ padding: '16px 12px', minHeight: 'calc(100vh - 120px)' }}>
-        <KanbanBoard
-          tasks={filteredTasks}
-          loading={loading}
-          onTaskClick={openEditTask}
-          onStatusChange={handleStatusChange}
-        />
+      {/* ── Main content ── */}
+      <div
+        style={{
+          padding: view === 'board' ? '16px 12px' : '0',
+          minHeight: 'calc(100vh - 120px)',
+        }}
+      >
+        {view === 'board' ? (
+          <KanbanBoard
+            tasks={filteredTasks}
+            loading={loading}
+            onTaskClick={openEditTask}
+            onStatusChange={handleStatusChange}
+          />
+        ) : (
+          <CalendarView
+            tasks={tasks}
+            ownerFilter={ownerFilter}
+            onTaskClick={openEditTask}
+          />
+        )}
       </div>
 
-      {/* FAB */}
-      <FloatButton
-        icon={<PlusOutlined />}
-        type="primary"
+      {/* ── FAB ── */}
+      <button
         onClick={openNewTask}
+        title="Add task"
         style={{
+          position: 'fixed',
           right: 20,
           bottom: 24,
-          width: 52,
-          height: 52,
+          width: 48,
+          height: 48,
+          borderRadius: '50%',
+          background: 'var(--accent)',
+          border: 'none',
+          color: 'white',
+          fontSize: 24,
+          lineHeight: 1,
+          cursor: 'pointer',
+          boxShadow: '0 2px 12px rgba(90,104,71,0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'background 0.15s, box-shadow 0.15s',
+          zIndex: 200,
+          fontFamily: 'system-ui, sans-serif',
         }}
-        tooltip="Add task"
-      />
+        onMouseEnter={(e) => {
+          ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-hover)'
+          ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 16px rgba(90,104,71,0.45)'
+        }}
+        onMouseLeave={(e) => {
+          ;(e.currentTarget as HTMLButtonElement).style.background = 'var(--accent)'
+          ;(e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 12px rgba(90,104,71,0.35)'
+        }}
+      >
+        +
+      </button>
 
-      {/* Task modal */}
+      {/* ── Task modal ── */}
       <TaskModal
         task={editTask}
         open={modalOpen}
-        onClose={() => {
-          setModalOpen(false)
-          setEditTask(null)
-        }}
+        onClose={() => { setModalOpen(false); setEditTask(null) }}
         onSave={handleSave}
         onDelete={handleDelete}
       />

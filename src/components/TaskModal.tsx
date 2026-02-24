@@ -12,7 +12,7 @@ import {
 } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import type { Task } from '../types'
-import { OWNERS, OWNER_COLORS, STATUS_COLUMNS, normalizeStatus } from '../types'
+import { OWNERS, OWNER_COLORS, OWNER_BG, STATUS_COLUMNS, normalizeStatus } from '../types'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -25,7 +25,10 @@ interface Props {
   onDelete?: (id: string) => Promise<void>
 }
 
-const WEEK_OPTIONS = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7', 'Week 8', 'Week 9', 'Week 10', 'Week 11', 'Week 12']
+const WEEK_OPTIONS = [
+  'Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6',
+  'Week 7', 'Week 8', 'Week 9', 'Week 10', 'Week 11', 'Week 12',
+]
 const MONTH_OPTIONS = ['Month 1', 'Month 2', 'Month 3']
 
 export function TaskModal({ task, open, onClose, onSave, onDelete }: Props) {
@@ -61,7 +64,7 @@ export function TaskModal({ task, open, onClose, onSave, onDelete }: Props) {
       setSaving(true)
       await onSave(values)
       onClose()
-    } catch (e) {
+    } catch {
       // validation failed
     } finally {
       setSaving(false)
@@ -78,102 +81,131 @@ export function TaskModal({ task, open, onClose, onSave, onDelete }: Props) {
 
   return (
     <Modal
-      title={isEditing ? 'Edit Task' : 'New Task'}
+      title={
+        <span
+          style={{
+            fontSize: 15,
+            fontWeight: 500,
+            letterSpacing: '-0.01em',
+            color: 'var(--text-primary)',
+          }}
+        >
+          {isEditing ? 'Edit task' : 'New task'}
+        </span>
+      }
       open={open}
       onCancel={onClose}
       footer={null}
       width="min(96vw, 480px)"
       style={{ top: 20 }}
       destroyOnClose
+      styles={{
+        header: { borderBottom: '1px solid var(--border)', paddingBottom: 12 },
+      }}
     >
-      <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
+      <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
         <Form.Item
           name="title"
-          label="Title"
+          label={<MetaLabel>Title</MetaLabel>}
           rules={[{ required: true, message: 'Title is required' }]}
         >
-          <Input placeholder="What needs to be done?" size="large" autoFocus />
-        </Form.Item>
-
-        <Form.Item name="description" label="Description">
-          <TextArea
-            rows={3}
-            placeholder="Optional details..."
-            style={{ resize: 'none' }}
+          <Input
+            placeholder="What needs to be done?"
+            size="large"
+            autoFocus
+            style={{ borderRadius: 6 }}
           />
         </Form.Item>
 
-        <Space style={{ width: '100%' }} direction="vertical" size={0}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="owner" label="Owner">
-              <Select placeholder="Assign to..." allowClear>
-                {OWNERS.map((o) => (
-                  <Select.Option key={o} value={o}>
+        <Form.Item name="description" label={<MetaLabel>Description</MetaLabel>}>
+          <TextArea
+            rows={3}
+            placeholder="Optional notes..."
+            style={{ resize: 'none', borderRadius: 6 }}
+          />
+        </Form.Item>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Form.Item name="owner" label={<MetaLabel>Owner</MetaLabel>}>
+            <Select placeholder="Assign to..." allowClear>
+              {OWNERS.map((o) => (
+                <Select.Option key={o} value={o}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
                     <span
                       style={{
                         display: 'inline-block',
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        background: OWNER_COLORS[o],
-                        marginRight: 6,
+                        padding: '1px 7px',
+                        borderRadius: 10,
+                        background: OWNER_BG[o],
+                        color: OWNER_COLORS[o],
+                        fontSize: 11,
+                        fontWeight: 500,
+                        letterSpacing: '0.05em',
+                        textTransform: 'uppercase',
                       }}
-                    />
-                    {o}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
+                    >
+                      {o}
+                    </span>
+                  </span>
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
 
-            <Form.Item name="priority" label="Priority">
-              <Select>
-                <Select.Option value="high">🔴 High</Select.Option>
-                <Select.Option value="normal">🟡 Normal</Select.Option>
-                <Select.Option value="low">⚪ Low</Select.Option>
-              </Select>
-            </Form.Item>
-          </div>
+          <Form.Item name="priority" label={<MetaLabel>Priority</MetaLabel>}>
+            <Select>
+              <Select.Option value="high">High</Select.Option>
+              <Select.Option value="normal">Normal</Select.Option>
+              <Select.Option value="low">Low</Select.Option>
+            </Select>
+          </Form.Item>
+        </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="status" label="Status">
-              <Select>
-                {STATUS_COLUMNS.map((s) => (
-                  <Select.Option key={s.key} value={s.key}>
-                    {s.label}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Form.Item name="status" label={<MetaLabel>Status</MetaLabel>}>
+            <Select>
+              {STATUS_COLUMNS.map((s) => (
+                <Select.Option key={s.key} value={s.key}>
+                  {s.label}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
 
-            <Form.Item name="due_date" label="Due Date">
-              <Input type="date" />
-            </Form.Item>
-          </div>
+          <Form.Item name="due_date" label={<MetaLabel>Due date</MetaLabel>}>
+            <Input type="date" style={{ borderRadius: 6 }} />
+          </Form.Item>
+        </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="week" label="Week">
-              <Select placeholder="Week..." allowClear>
-                {WEEK_OPTIONS.map((w) => (
-                  <Select.Option key={w} value={w}>{w}</Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Form.Item name="week" label={<MetaLabel>Week</MetaLabel>}>
+            <Select placeholder="Week..." allowClear>
+              {WEEK_OPTIONS.map((w) => (
+                <Select.Option key={w} value={w}>{w}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
 
-            <Form.Item name="month" label="Month">
-              <Select placeholder="Month..." allowClear>
-                {MONTH_OPTIONS.map((m) => (
-                  <Select.Option key={m} value={m}>{m}</Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </div>
-        </Space>
+          <Form.Item name="month" label={<MetaLabel>Month</MetaLabel>}>
+            <Select placeholder="Month..." allowClear>
+              {MONTH_OPTIONS.map((m) => (
+                <Select.Option key={m} value={m}>{m}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+        </div>
 
         {isEditing && (
           <>
-            <Divider style={{ margin: '8px 0 16px' }} />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              Created {task?.created_at ? new Date(task.created_at).toLocaleDateString() : '—'}
+            <Divider style={{ margin: '4px 0 14px', borderColor: 'var(--border)' }} />
+            <Text style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+              Created {task?.created_at ? new Date(task.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
             </Text>
           </>
         )}
@@ -189,6 +221,7 @@ export function TaskModal({ task, open, onClose, onSave, onDelete }: Props) {
           {isEditing && onDelete ? (
             <Popconfirm
               title="Delete this task?"
+              description="This cannot be undone."
               onConfirm={handleDelete}
               okText="Delete"
               okButtonProps={{ danger: true }}
@@ -197,6 +230,7 @@ export function TaskModal({ task, open, onClose, onSave, onDelete }: Props) {
                 danger
                 icon={<DeleteOutlined />}
                 loading={deleting}
+                size="small"
               >
                 Delete
               </Button>
@@ -206,13 +240,29 @@ export function TaskModal({ task, open, onClose, onSave, onDelete }: Props) {
           )}
 
           <Space>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button type="primary" onClick={handleSave} loading={saving}>
-              {isEditing ? 'Save Changes' : 'Add Task'}
+            <Button onClick={onClose} size="small">Cancel</Button>
+            <Button type="primary" onClick={handleSave} loading={saving} size="small">
+              {isEditing ? 'Save changes' : 'Add task'}
             </Button>
           </Space>
         </div>
       </Form>
     </Modal>
+  )
+}
+
+function MetaLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: '0.07em',
+        textTransform: 'uppercase',
+        color: 'var(--text-muted)',
+      }}
+    >
+      {children}
+    </span>
   )
 }

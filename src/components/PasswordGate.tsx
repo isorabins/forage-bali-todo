@@ -1,8 +1,5 @@
 import { useState } from 'react'
-import { Button, Input, Typography, Card } from 'antd'
-import { LockOutlined } from '@ant-design/icons'
 
-const { Title, Text } = Typography
 const PASSWORD = 'foragebali2026'
 const STORAGE_KEY = 'foragebali_auth'
 
@@ -26,6 +23,10 @@ export function PasswordGate({ onUnlock }: Props) {
     }
   }
 
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSubmit()
+  }
+
   return (
     <div
       style={{
@@ -33,73 +34,117 @@ export function PasswordGate({ onUnlock }: Props) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'var(--bg)',
         padding: 24,
       }}
     >
-      <Card
+      <div
         style={{
           width: '100%',
-          maxWidth: 380,
-          borderRadius: 16,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          maxWidth: 340,
           animation: shake ? 'shake 0.5s ease' : undefined,
         }}
       >
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>🌿</div>
-          <Title level={3} style={{ margin: 0, color: '#1a1a1a' }}>
+        {/* Wordmark */}
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <div
+            style={{
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontWeight: 500,
+              fontSize: 22,
+              letterSpacing: '-0.03em',
+              color: 'var(--text-primary)',
+              marginBottom: 6,
+            }}
+          >
             Forage Bali
-          </Title>
-          <Text type="secondary">Team Task Board</Text>
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Team workspace
+          </div>
         </div>
 
-        <Input.Password
-          prefix={<LockOutlined style={{ color: '#8c8c8c' }} />}
-          placeholder="Enter password"
-          size="large"
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value)
-            setError(false)
-          }}
-          onPressEnter={handleSubmit}
-          status={error ? 'error' : undefined}
-          style={{ marginBottom: 8, borderRadius: 8 }}
-          autoFocus
-        />
-
-        {error && (
-          <Text type="danger" style={{ display: 'block', marginBottom: 12, fontSize: 13 }}>
-            Incorrect password. Try again.
-          </Text>
-        )}
-
-        <Button
-          type="primary"
-          size="large"
-          block
-          onClick={handleSubmit}
+        {/* Form */}
+        <div
           style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
             borderRadius: 8,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            border: 'none',
-            marginTop: error ? 0 : 16,
+            padding: '28px 24px',
+            boxShadow: '0 1px 6px rgba(0,0,0,0.06)',
           }}
         >
-          Enter
-        </Button>
-      </Card>
+          <input
+            type="password"
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value)
+              setError(false)
+            }}
+            onKeyDown={handleKey}
+            placeholder="Password"
+            autoFocus
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              fontSize: 14,
+              fontFamily: "'Inter', system-ui, sans-serif",
+              border: `1px solid ${error ? '#c0392b' : 'var(--border)'}`,
+              borderRadius: 6,
+              outline: 'none',
+              color: 'var(--text-primary)',
+              background: 'var(--bg)',
+              marginBottom: error ? 8 : 16,
+              transition: 'border-color 0.15s',
+            }}
+          />
 
-      <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-8px); }
-          40% { transform: translateX(8px); }
-          60% { transform: translateX(-8px); }
-          80% { transform: translateX(4px); }
-        }
-      `}</style>
+          {error && (
+            <div
+              style={{
+                fontSize: 12,
+                color: '#c0392b',
+                marginBottom: 12,
+              }}
+            >
+              Incorrect password. Try again.
+            </div>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            style={{
+              width: '100%',
+              padding: '10px',
+              background: 'var(--accent)',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              fontSize: 13,
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontWeight: 500,
+              letterSpacing: '0.04em',
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              ;(e.target as HTMLButtonElement).style.background = 'var(--accent-hover)'
+            }}
+            onMouseLeave={(e) => {
+              ;(e.target as HTMLButtonElement).style.background = 'var(--accent)'
+            }}
+          >
+            Enter
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

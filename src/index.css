@@ -1,3 +1,14 @@
+:root {
+  --bg: #faf8f5;
+  --surface: #ffffff;
+  --border: #e6ddd0;
+  --text-primary: #2d251d;
+  --text-secondary: #8b7355;
+  --text-muted: #bfa88a;
+  --accent: #5a6847;
+  --accent-hover: #475339;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -9,13 +20,14 @@ html, body, #root {
 }
 
 body {
-  background: #f8f9fa;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  color: var(--text-primary);
   overscroll-behavior: none;
 }
 
-/* Mobile scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar {
   height: 4px;
   width: 4px;
@@ -24,11 +36,209 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--border);
   border-radius: 2px;
 }
 
-/* Prevent text selection during drag */
-.ant-float-btn {
-  box-shadow: 0 4px 16px rgba(22, 119, 255, 0.4) !important;
+/* Override Ant Design blue with moss */
+.ant-btn-primary {
+  background-color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+.ant-btn-primary:hover {
+  background-color: var(--accent-hover) !important;
+  border-color: var(--accent-hover) !important;
+}
+
+/* Shake animation for password error */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(4px); }
+}
+
+/* View toggle buttons */
+.view-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.view-toggle button {
+  padding: 5px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+
+.view-toggle button.active {
+  background: var(--accent);
+  color: white;
+}
+
+.view-toggle button:hover:not(.active) {
+  background: var(--border);
+  color: var(--text-secondary);
+}
+
+/* Owner filter pills */
+.owner-pill {
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+
+.owner-pill:hover:not(.active) {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.owner-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* Task card */
+.task-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  cursor: grab;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  transition: box-shadow 0.2s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.task-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.task-card:active {
+  cursor: grabbing;
+}
+
+/* Calendar styles */
+.calendar-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.calendar-week-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  border-bottom: 1px solid var(--border);
+  min-height: 48px;
+}
+
+.calendar-week-row:nth-child(even) {
+  background: var(--bg);
+}
+
+.calendar-week-row:nth-child(odd) {
+  background: var(--surface);
+}
+
+.calendar-week-label {
+  padding: 10px 14px;
+  border-right: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.calendar-week-label .week-num {
+  color: var(--text-secondary);
+}
+
+.calendar-week-label .week-dates {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.calendar-tasks {
+  padding: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.calendar-task-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  max-width: 180px;
+  transition: box-shadow 0.15s;
+}
+
+.calendar-task-chip:hover {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+
+.calendar-task-chip .owner-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.calendar-task-chip .chip-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 600px) {
+  .calendar-week-row {
+    grid-template-columns: 1fr;
+  }
+  .calendar-week-label {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex-direction: row;
+    gap: 6px;
+    padding: 8px 12px;
+  }
+  .calendar-week-label .week-dates::before {
+    content: '·';
+    margin-right: 6px;
+    color: var(--border);
+  }
 }
