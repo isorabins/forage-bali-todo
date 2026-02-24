@@ -20,9 +20,10 @@ interface ColumnProps {
   label: string
   tasks: Task[]
   onCardClick: (task: Task) => void
+  flexGrow?: number
 }
 
-function Column({ id, label, tasks, onCardClick }: ColumnProps) {
+function Column({ id, label, tasks, onCardClick, flexGrow = 1 }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id })
 
   return (
@@ -31,9 +32,8 @@ function Column({ id, label, tasks, onCardClick }: ColumnProps) {
         background: isOver ? '#f2f4ef' : 'transparent',
         borderRadius: 8,
         padding: '10px 8px 12px',
-        minWidth: 260,
-        flex: '1 0 260px',
-        maxWidth: 320,
+        flex: `${flexGrow} 0 0`,
+        minWidth: 220,
         border: isOver ? '1px dashed #5a6847' : '1px solid transparent',
         transition: 'background 0.15s, border-color 0.15s',
       }}
@@ -44,15 +44,15 @@ function Column({ id, label, tasks, onCardClick }: ColumnProps) {
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          marginBottom: 12,
+          marginBottom: 14,
           padding: '0 4px',
         }}
       >
         <span
           style={{
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 600,
-            letterSpacing: '0.1em',
+            letterSpacing: '0.12em',
             textTransform: 'uppercase',
             color: 'var(--text-muted)',
           }}
@@ -123,8 +123,6 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
   const tasksByStatus = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = {
       todo: [],
-      'in-progress': [],
-      blocked: [],
       done: [],
     }
     for (const task of tasks) {
@@ -192,10 +190,9 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
       <div
         style={{
           display: 'flex',
-          gap: 12,
-          overflowX: 'auto',
+          gap: 16,
           padding: '4px 0 16px',
-          WebkitOverflowScrolling: 'touch',
+          height: '100%',
         }}
       >
         {STATUS_COLUMNS.map((col) => (
@@ -205,6 +202,7 @@ export function KanbanBoard({ tasks, loading, onTaskClick, onStatusChange }: Pro
             label={col.label}
             tasks={tasksByStatus[col.key]}
             onCardClick={onTaskClick}
+            flexGrow={col.key === 'todo' ? 2 : 1}
           />
         ))}
       </div>

@@ -1,4 +1,4 @@
-export type TaskStatus = 'todo' | 'in-progress' | 'blocked' | 'done'
+export type TaskStatus = 'todo' | 'done'
 export type TaskPriority = 'high' | 'normal' | 'low'
 export type TaskOwner = 'Iso' | 'Yuka' | 'Carla' | 'Alex'
 
@@ -44,10 +44,8 @@ export const OWNER_DOT: Record<string, string> = {
 }
 
 export const STATUS_COLUMNS: { key: TaskStatus; label: string }[] = [
-  { key: 'todo', label: 'To Do' },
-  { key: 'in-progress', label: 'In Progress' },
-  { key: 'blocked', label: 'Blocked' },
-  { key: 'done', label: 'Done' },
+  { key: 'todo', label: 'TO DO' },
+  { key: 'done', label: 'DONE' },
 ]
 
 export const PRIORITY_LABELS: Record<string, string> = {
@@ -65,10 +63,10 @@ export const PRIORITY_BORDER: Record<string, string> = {
   medium: '#e6ddd0',
 }
 
-// Normalize status for display (legacy 'up-next' → 'todo')
+// Normalize status for display (legacy 'up-next', 'in-progress', 'blocked' → 'todo')
 export function normalizeStatus(status: string): TaskStatus {
-  if (status === 'up-next') return 'todo'
-  if (['todo', 'in-progress', 'blocked', 'done'].includes(status)) return status as TaskStatus
+  if (status === 'done') return 'done'
+  // All other statuses collapse to 'todo'
   return 'todo'
 }
 

@@ -7,6 +7,7 @@ import { PasswordGate, isAuthenticated } from './components/PasswordGate'
 import { KanbanBoard } from './components/KanbanBoard'
 import { TaskModal } from './components/TaskModal'
 import { CalendarView } from './components/CalendarView'
+import { GardenView } from './components/GardenView'
 
 // Collect unique week/month values from tasks
 function getFilterOptions(tasks: Task[], field: 'week' | 'month') {
@@ -21,7 +22,7 @@ function getFilterOptions(tasks: Task[], field: 'week' | 'month') {
   })
 }
 
-type AppView = 'board' | 'calendar'
+type AppView = 'board' | 'calendar' | 'garden'
 
 function App() {
   const [authed, setAuthed] = useState(isAuthenticated())
@@ -174,9 +175,9 @@ function App() {
       {/* ── Header ── */}
       <div
         style={{
-          background: 'var(--surface)',
+          background: 'var(--bg)',
           borderBottom: '1px solid var(--border)',
-          padding: '12px 16px 10px',
+          padding: '14px 20px 12px',
           position: 'sticky',
           top: 0,
           zIndex: 100,
@@ -191,20 +192,21 @@ function App() {
             marginBottom: 12,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
             <span
               style={{
-                fontSize: 16,
-                fontWeight: 500,
+                fontSize: 26,
+                fontWeight: 600,
                 letterSpacing: '-0.02em',
                 color: 'var(--text-primary)',
+                lineHeight: 1,
               }}
             >
               Forage Bali
             </span>
             <span
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: 'var(--text-muted)',
                 letterSpacing: '0.04em',
               }}
@@ -214,7 +216,7 @@ function App() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Board / Calendar toggle */}
+            {/* Board / Calendar / Garden toggle */}
             <div className="view-toggle">
               <button
                 className={view === 'board' ? 'active' : ''}
@@ -228,7 +230,21 @@ function App() {
               >
                 Calendar
               </button>
+              <button
+                className={view === 'garden' ? 'active' : ''}
+                onClick={() => setView('garden')}
+              >
+                Garden
+              </button>
             </div>
+
+            {/* Add Task — prominent header button */}
+            <button
+              onClick={openNewTask}
+              className="add-task-btn"
+            >
+              + Add Task
+            </button>
 
             {/* Logout */}
             <button
@@ -260,8 +276,8 @@ function App() {
             alignItems: 'center',
           }}
         >
-          {/* Owner filter pills */}
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+          {/* Owner filter tabs */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {['All', 'Iso', 'Yuka', 'Carla', 'Alex'].map((o) => (
               <button
                 key={o}
@@ -318,7 +334,7 @@ function App() {
       {/* ── Main content ── */}
       <div
         style={{
-          padding: view === 'board' ? '16px 12px' : '0',
+          padding: view === 'board' ? '16px 20px' : '0',
           minHeight: 'calc(100vh - 120px)',
         }}
       >
@@ -329,11 +345,20 @@ function App() {
             onTaskClick={openEditTask}
             onStatusChange={handleStatusChange}
           />
-        ) : (
+        ) : view === 'calendar' ? (
           <CalendarView
             tasks={tasks}
             ownerFilter={ownerFilter}
             onTaskClick={openEditTask}
+          />
+        ) : (
+          <GardenView
+            tasks={tasks}
+            onOwnerWeekFilter={(owner, week) => {
+              setOwnerFilter(owner)
+              setWeekFilter(week)
+              setView('board')
+            }}
           />
         )}
       </div>
