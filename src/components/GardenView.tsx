@@ -7,181 +7,137 @@ interface Props {
   onOwnerWeekFilter: (owner: string, week: string) => void
 }
 
-// ── Palette ────────────────────────────────────────────────────────────────────
-const BARK       = '#8b7355'
-const GREEN_BUD  = '#7a9e6b'
-const GREEN_FULL = '#5a8a4a'
-const LEAF_COLOR = '#a8c498'
-const CORAL      = '#c97d60'
-const BARE_SAND  = '#d4c5b0'
+// ── SVG canvas constants ───────────────────────────────────────────────────────
+const SVG_W = 1000
+const SVG_H = 800
 
-// ── Layout ─────────────────────────────────────────────────────────────────────
-const SVG_W        = 800
-const SVG_H        = 900
-const TRUNK_X      = 400
-const TRUNK_BOTTOM = 820
-const TRUNK_TOP    = 80
-const WEEK_COUNT   = 12
-const WEEK_SPACING = (TRUNK_BOTTOM - TRUNK_TOP) / (WEEK_COUNT - 1)  // ≈ 67
-const TRUNK_LENGTH = TRUNK_BOTTOM - TRUNK_TOP                        // 740
-
-const MILESTONES: Record<number, string> = {
-  1:  'Foundation',
-  3:  'Noko goes live',
-  6:  'First beta class',
-  9:  'First paid class',
-  12: 'Scale',
+// ── Seeded PRNG (deterministic — same tree every render) ──────────────────────
+class SeededRandom {
+  private seed: number
+  constructor(seed: number) { this.seed = seed }
+  next(): number {
+    this.seed = (this.seed * 9301 + 49297) % 233280
+    return this.seed / 233280
+  }
 }
 
-// ── Current week from today's date ────────────────────────────────────────────
+// ── Branch data ────────────────────────────────────────────────────────────────
+interface Branch {
+  x1: number; y1: number
+  x2: number; y2: number
+  cpx: number; cpy: number   // quadratic bezier control point
+  depth: number
+  angle: number
+  length: number
+  weekIndex: number           // 1-12: which week "owns" this branch
+}
+
+// ── Recursive fractal tree generator ──────────────────────────────────────────
+function generateTree(
+  x: number, y: number,
+  angle: number,              // degrees, 90 = straight up
+  length: number,
+  depth: number,
+  weekIndex: number,
+  branches: Branch[],
+  rand: SeededRandom,
+): void {
+  if (depth === 0 || length < 3) return
+
+  const rad = (angle * Math.PI) / 180
+  const curve = rand.next() * 20 - 10                                      // slight S-curve
+  const cpx = x + Math.cos(rad + Math.PI / 2) * curve + Math.cos(rad) * length * 0.5
+  const cpy = y - Math.sin(rad + Math.PI / 2) * curve - Math.sin(rad) * length * 0.5
+  const x2 = x + Math.cos(rad) * length
+  const y2 = y - Math.sin(rad) * length
+
+  branches.push({ x1: x, y1: y, x2, y2, cpx, cpy, depth, angle, length, weekIndex })
+
+  const splitCount = depth > 5 && rand.next() > 0.6 ? 3 : 2
+  const spreadBase = 25 + rand.next() * 20                                 // 25-45°
+
+  for (let i = 0; i < splitCount; i++) {
+    const angleOffset = splitCount === 2
+      ? (i === 0 ? -spreadBase : spreadBase)
+      : (i - 1) * spreadBase
+    const newAngle = angle + angleOffset + (rand.next() * 10 - 5)
+    const newLength = length * (0.6 + rand.next() * 0.1)
+    const newWeek = weekIndex + Math.floor(12 / Math.pow(2, 8 - depth))
+    generateTree(x2, y2, newAngle, newLength, depth - 1, Math.min(newWeek, 12), branches, rand)
+  }
+}
+
+// ── Visual mapping: depth → stroke width ──────────────────────────────────────
+function getBranchWidth(depth: number): number {
+  const map: Record<number, number> = {
+    9: 18, 8: 14, 7: 10, 6: 7, 5: 5, 4: 3.5, 3: 2, 2: 1.2, 1: 0.7,
+  }
+  return map[depth] ?? 0.7
+}
+
+// ── Visual mapping: depth → bark color ────────────────────────────────────────
+function getBranchColor(depth: number): string {
+  if (depth >= 8) return '#6b5344'   // dark bark — trunk & main
+  if (depth >= 6) return '#8b7355'   // warm bark — branches
+  if (depth >= 4) return '#a08060'   // lighter bark — sub-branches
+  if (depth >= 2) return '#b89070'   // pale bark — twigs
+  return '#7a9e6b'                   // transitioning to green — tips
+}
+
+// ── Current week from program start date ──────────────────────────────────────
 function computeActualWeek(): number {
-  const now          = new Date()
+  const now = new Date()
   const weekOneStart = new Date('2026-02-24')
-  const diffDays     = Math.floor((now.getTime() - weekOneStart.getTime()) / 86_400_000)
+  const diffDays = Math.floor((now.getTime() - weekOneStart.getTime()) / 86_400_000)
   if (diffDays < 0) return 1
   return Math.max(1, Math.min(12, Math.floor(diffDays / 7) + 1))
 }
 
-// ── Seeded PRNG (stable across renders) ───────────────────────────────────────
-function seededRand(seed: number) {
-  let s = seed | 0
-  return () => {
-    s = (Math.imul(1664525, s) + 1013904223) | 0
-    return (s >>> 0) / 0xffffffff
+// ── Leaf cluster attached to a branch tip ─────────────────────────────────────
+interface Leaf {
+  cx: number; cy: number
+  rx: number; ry: number
+  rotation: number
+  color: string
+}
+
+function generateLeafCluster(branch: Branch, rand: SeededRandom): Leaf[] {
+  const count = 3 + Math.floor(rand.next() * 5)  // 3-7 per tip
+  const leaves: Leaf[] = []
+  for (let i = 0; i < count; i++) {
+    const spread = rand.next() * 60 - 30           // ±30° around branch direction
+    const dist = rand.next() * 14 + 4
+    const leafRad = ((branch.angle + spread) * Math.PI) / 180
+    const cx = branch.x2 + Math.cos(leafRad) * dist
+    const cy = branch.y2 - Math.sin(leafRad) * dist
+    const rx = 8 + rand.next() * 6                 // 8-14px
+    const ry = 4 + rand.next() * 3                 // 4-7px
+    const rotation = rand.next() * 360
+    const color = rand.next() > 0.5 ? '#7a9e6b' : '#a8c498'
+    leaves.push({ cx, cy, rx, ry, rotation, color })
   }
+  return leaves
 }
 
-// ── Cubic bezier helpers ───────────────────────────────────────────────────────
-function bezierPoint(
-  p0x: number, p0y: number,
-  p1x: number, p1y: number,
-  p2x: number, p2y: number,
-  p3x: number, p3y: number,
-  t: number,
-): [number, number] {
-  const mt = 1 - t
-  return [
-    mt**3*p0x + 3*mt**2*t*p1x + 3*mt*t**2*p2x + t**3*p3x,
-    mt**3*p0y + 3*mt**2*t*p1y + 3*mt*t**2*p2y + t**3*p3y,
-  ]
-}
-
-function branchPath(sx: number, sy: number, ex: number, ey: number, dir: 'left' | 'right') {
-  const sign = dir === 'left' ? -1 : 1
-  const dx   = Math.abs(ex - sx)
-  const cp1x = sx + sign * dx * 0.25;  const cp1y = sy - 18
-  const cp2x = sx + sign * dx * 0.75;  const cp2y = ey - 10
-  return {
-    path: `M ${sx},${sy} C ${cp1x},${cp1y} ${cp2x},${cp2y} ${ex},${ey}`,
-    cp1x, cp1y, cp2x, cp2y,
+// ── 5-petal flower polygon at a branch tip ────────────────────────────────────
+function flowerPoints(cx: number, cy: number, r = 6): string {
+  const pts: string[] = []
+  for (let i = 0; i < 5; i++) {
+    const outerRad = ((i * 72 - 90) * Math.PI) / 180
+    const innerRad = (((i * 72 + 36) - 90) * Math.PI) / 180
+    pts.push(`${cx + Math.cos(outerRad) * r},${cy + Math.sin(outerRad) * r}`)
+    pts.push(`${cx + Math.cos(innerRad) * r * 0.4},${cy + Math.sin(innerRad) * r * 0.4}`)
   }
+  return pts.join(' ')
 }
 
-// ── Leaf data ──────────────────────────────────────────────────────────────────
-interface Leaf { cx: number; cy: number; rx: number; ry: number; angle: number; accent: boolean }
-
-function generateLeaves(
-  sx: number, sy: number,
-  ex: number, ey: number,
-  cp1x: number, cp1y: number,
-  cp2x: number, cp2y: number,
-  count: number, seedOffset: number,
-): Leaf[] {
-  const rand = seededRand(seedOffset)
-  return Array.from({ length: count }, (_, i) => {
-    const t   = Math.max(0, Math.min(1, 0.1 + (i / Math.max(count-1,1)) * 0.75 + (rand()-0.5)*0.08))
-    const [bx, by] = bezierPoint(sx, sy, cp1x, cp1y, cp2x, cp2y, ex, ey, t)
-    return {
-      cx: bx + (rand()-0.5)*10,
-      cy: by + (rand()-0.5)*24,
-      rx: 5 + rand()*5,
-      ry: 2.5 + rand()*3,
-      angle: -60 + rand()*120,
-      accent: rand() < 0.18,
-    }
-  })
-}
-
-// ── Flower (4-petal SVG) ───────────────────────────────────────────────────────
-function flowerPath(cx: number, cy: number, r = 9): string {
-  const p = r * 0.55
-  return [
-    `M ${cx},${cy-r}`,
-    `C ${cx+p},${cy-r} ${cx+r},${cy-p} ${cx},${cy}`,
-    `C ${cx+r},${cy+p} ${cx+p},${cy+r} ${cx},${cy+r}`,
-    `C ${cx-p},${cy+r} ${cx-r},${cy+p} ${cx},${cy}`,
-    `C ${cx-r},${cy-p} ${cx-p},${cy-r} ${cx},${cy-r}`,
-    'Z',
-  ].join(' ')
-}
-
-// ── Diamond hint for future milestones ────────────────────────────────────────
-function diamondPath(cx: number, cy: number, r = 5): string {
-  return `M ${cx},${cy-r} L ${cx+r},${cy} L ${cx},${cy+r} L ${cx-r},${cy} Z`
-}
-
-// ── Growth stages ─────────────────────────────────────────────────────────────
-type Stage = 'bare' | 'budding' | 'growing' | 'lush' | 'bloomed'
-
-function getStage(pct: number, visible: boolean, hasData: boolean): Stage {
-  if (!visible || !hasData) return 'bare'
-  if (pct >= 1)    return 'bloomed'
-  if (pct >= 0.67) return 'lush'
-  if (pct >= 0.34) return 'growing'
-  if (pct > 0)     return 'budding'
-  return 'bare'
-}
-
-function stageBranch(s: Stage): { color: string; opacity: number; width: number } {
-  if (s === 'bloomed' || s === 'lush') return { color: GREEN_FULL, opacity: 1.0,  width: 2.0 }
-  if (s === 'growing')                 return { color: GREEN_BUD,  opacity: 0.85, width: 1.8 }
-  if (s === 'budding')                 return { color: BARK,       opacity: 0.55, width: 1.5 }
-  return                                      { color: BARE_SAND,  opacity: 0.2,  width: 1.2 }
-}
-
-function stageLeafCount(s: Stage): number {
-  if (s === 'bloomed') return 12
-  if (s === 'lush')    return 8
-  if (s === 'growing') return 5
-  if (s === 'budding') return 2
-  return 0
-}
-
-function leafColor(s: Stage, accent: boolean): string {
-  if (accent && s === 'bloomed') return CORAL
-  if (s === 'lush' || s === 'bloomed') return GREEN_BUD
-  if (s === 'growing') return LEAF_COLOR
-  return BARE_SAND
-}
-
-// ── Tooltip ────────────────────────────────────────────────────────────────────
-interface TooltipData { x: number; y: number; week: string; done: number; total: number }
-
-function Tooltip({ data }: { data: TooltipData }) {
-  const n = parseInt(data.week.replace(/\D/g,''), 10)
-  const dr = WEEK_DATES[`Week ${n}`] || ''
-  return (
-    <g style={{ pointerEvents: 'none' }}>
-      <rect x={data.x-72} y={data.y-42} width={144} height={36} rx={6} fill="#2d2a27" opacity={0.93}/>
-      <text x={data.x} y={data.y-26} textAnchor="middle"
-        style={{ fontSize: 11, fill: '#f8f5f2', fontFamily: "'Inter',system-ui,sans-serif", fontWeight: 500 }}>
-        {data.week} · {data.done}/{data.total} done
-      </text>
-      {dr && (
-        <text x={data.x} y={data.y-12} textAnchor="middle"
-          style={{ fontSize: 9, fill: BARE_SAND, fontFamily: "'Inter',system-ui,sans-serif" }}>
-          {dr}
-        </text>
-      )}
-    </g>
-  )
-}
+// ── Milestones (flower weeks) ──────────────────────────────────────────────────
+const MILESTONE_WEEKS = new Set([3, 6, 9, 12])
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
   const actualWeek = useMemo(() => computeActualWeek(), [])
 
-  // previewWeek: what the slider/play shows. Starts at actualWeek (bare tree).
   const [previewWeek, setPreviewWeekState] = useState(actualWeek)
   const previewWeekRef = useRef(actualWeek)
   const setPreviewWeek = useCallback((w: number) => {
@@ -189,16 +145,50 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
     setPreviewWeekState(w)
   }, [])
 
-  const [isDragging, setIsDragging]  = useState(false)
-  const [isPlaying,  setIsPlaying]   = useState(false)
-  const [tooltip,    setTooltip]     = useState<TooltipData | null>(null)
-  const [hoveredMs,  setHoveredMs]   = useState<number | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
-  const springRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const playRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const springRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const playRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isPlayingRef = useRef(false)
 
-  // ── Week stats ───────────────────────────────────────────────────────────────
+  // Trigger the trunk draw animation on mount
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 80)
+    return () => clearTimeout(t)
+  }, [])
+
+  // ── Generate all fractal branches (fixed seed = same tree every time) ────────
+  const branches = useMemo(() => {
+    const rand = new SeededRandom(42)
+    const result: Branch[] = []
+    generateTree(
+      SVG_W / 2,         // center x
+      SVG_H - 60,        // near bottom
+      90,                // pointing straight up
+      SVG_H * 0.22,      // trunk ≈ 22% of height
+      9,                 // 9 levels deep
+      1,                 // starts at week 1
+      result,
+      rand,
+    )
+    return result
+  }, [])
+
+  // ── Pre-generate leaf clusters for shallow branches ───────────────────────────
+  const leafClusters = useMemo(() => {
+    const rand = new SeededRandom(137)
+    return branches
+      .filter(b => b.depth <= 3)
+      .map(b => ({
+        branch: b,
+        leaves: generateLeafCluster(b, rand),
+        isFlower: MILESTONE_WEEKS.has(b.weekIndex) && b.depth <= 2,
+      }))
+  }, [branches])
+
+  // ── Week stats from tasks ─────────────────────────────────────────────────────
   const weekStats = useMemo(() => {
     const map: Record<string, { done: number; total: number }> = {}
     for (const t of tasks) {
@@ -210,32 +200,26 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
     return map
   }, [tasks])
 
-  const totalDone  = tasks.filter(t => normalizeStatus(t.status) === 'done').length
+  const totalDone = tasks.filter(t => normalizeStatus(t.status) === 'done').length
   const totalTasks = tasks.length
 
-  const maxWeekTasks = useMemo(() => {
-    const vals = Object.values(weekStats).map(w => w.total)
-    return Math.max(...vals, 1)
-  }, [weekStats])
-
-  // ── Summary text ─────────────────────────────────────────────────────────────
   const summaryText = useMemo(() => {
     const total = totalTasks || 220
     if (totalDone >= total) return 'The Forage Bali forest is complete. 🌿'
-    if (totalDone / total > 0.5) return `Your garden is in full bloom — ${totalDone} of ${total} tasks done`
-    return `Your garden is just beginning to grow — ${totalDone} of ${total} tasks done`
+    if (totalDone / total > 0.5) return `Full bloom — ${totalDone} of ${total} tasks complete`
+    return `Your garden is growing — ${totalDone} of ${total} tasks complete`
   }, [totalDone, totalTasks])
 
-  // ── Spring-back: step previewWeek toward actualWeek over ~600ms ──────────────
+  // ── Spring-back: animate previewWeek → actualWeek ────────────────────────────
   const triggerSpringBack = useCallback(() => {
     if (springRef.current) clearTimeout(springRef.current)
     const start = previewWeekRef.current
-    const end   = actualWeek
+    const end = actualWeek
     if (start === end) return
-    const steps   = Math.abs(end - start)
-    const stepMs  = Math.max(40, Math.round(600 / steps))
-    const dir     = end > start ? 1 : -1
-    let   current = start
+    const steps = Math.abs(end - start)
+    const stepMs = Math.max(40, Math.round(600 / steps))
+    const dir = end > start ? 1 : -1
+    let current = start
     const tick = () => {
       current += dir
       setPreviewWeek(current)
@@ -255,23 +239,19 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
     triggerSpringBack()
   }
 
-  // ── Play / Reset ──────────────────────────────────────────────────────────────
+  // ── Play animation ────────────────────────────────────────────────────────────
   const handlePlay = () => {
     if (isPlayingRef.current) {
-      // Stop — cancel pending step, snap back immediately
       isPlayingRef.current = false
       if (playRef.current) clearTimeout(playRef.current)
       setIsPlaying(false)
       triggerSpringBack()
       return
     }
-
-    // Start
     if (springRef.current) clearTimeout(springRef.current)
     isPlayingRef.current = true
     setIsPlaying(true)
     setPreviewWeek(1)
-
     let wk = 1
     const step = () => {
       wk++
@@ -279,7 +259,6 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
       if (wk < 12 && isPlayingRef.current) {
         playRef.current = setTimeout(step, 800)
       } else {
-        // Reached week 12 (or was stopped) — wait 1 s then spring back
         isPlayingRef.current = false
         setIsPlaying(false)
         setTimeout(() => triggerSpringBack(), 1000)
@@ -290,52 +269,84 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
 
   const handleReset = () => {
     isPlayingRef.current = false
-    if (playRef.current)   clearTimeout(playRef.current)
+    if (playRef.current) clearTimeout(playRef.current)
     if (springRef.current) clearTimeout(springRef.current)
     setIsPlaying(false)
     setIsDragging(false)
     setPreviewWeek(actualWeek)
   }
 
-  // Cleanup timers on unmount
   useEffect(() => () => {
     if (springRef.current) clearTimeout(springRef.current)
-    if (playRef.current)   clearTimeout(playRef.current)
+    if (playRef.current) clearTimeout(playRef.current)
   }, [])
 
-  // ── Node data ─────────────────────────────────────────────────────────────────
-  const nodes = useMemo(() =>
-    Array.from({ length: WEEK_COUNT }, (_, i) => {
-      const weekNum  = i + 1
-      const weekLabel = `Week ${weekNum}`
-      const y        = TRUNK_BOTTOM - i * WEEK_SPACING
-      const stats    = weekStats[weekLabel] || { done: 0, total: 0 }
-      const pct      = stats.total > 0 ? stats.done / stats.total : 0
-      return { weekNum, weekLabel, y, stats, pct }
-    }),
-  [weekStats])
-
+  const displayWeek = previewWeek
   const currentDateRange = WEEK_DATES[`Week ${previewWeek}`] || ''
+  const currentWeekStats = weekStats[`Week ${previewWeek}`] || { done: 0, total: 0 }
+
+  // ── Sorted branches: render deepest (thickest) first ─────────────────────────
+  const sortedBranches = useMemo(
+    () => [...branches].sort((a, b) => b.depth - a.depth),
+    [branches],
+  )
 
   return (
     <div style={{
+      position: 'relative',
+      width: '100%',
+      height: '100vh',
+      overflow: 'hidden',
       background: '#f8f5f2',
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
       fontFamily: "'Inter', system-ui, sans-serif",
     }}>
-      {/* ── Inline styles ─────────────────────────────────────────────────────── */}
+      {/* ── CSS ───────────────────────────────────────────────────────────────── */}
       <style>{`
-        @keyframes trunkDraw {
-          from { stroke-dashoffset: ${TRUNK_LENGTH}; }
+        @keyframes drawTrunk {
+          from { stroke-dashoffset: 300; }
           to   { stroke-dashoffset: 0; }
         }
-        .g-branch, .g-node, .g-leaf {
-          transition: all 0.4s ease;
+        @keyframes drawBranch {
+          from { stroke-dashoffset: var(--brlen, 200); }
+          to   { stroke-dashoffset: 0; }
         }
-        .g-leaf {
-          transition: opacity 0.4s ease, transform 0.4s ease;
+        @keyframes flowerPop {
+          0%   { opacity: 0; transform: scale(0) rotate(-20deg); }
+          60%  { opacity: 1; transform: scale(1.2) rotate(5deg); }
+          100% { opacity: 0.9; transform: scale(1) rotate(0deg); }
+        }
+        .trunk-anim {
+          stroke-dasharray: 300;
+          animation: drawTrunk 1.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .branch-anim-8 {
+          animation: drawBranch 1.1s 0.1s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .branch-anim-7 {
+          animation: drawBranch 0.9s 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .branch-anim-6 {
+          animation: drawBranch 0.7s 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .branch-anim-5 {
+          animation: drawBranch 0.6s 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .branch-anim-4 {
+          animation: drawBranch 0.5s 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .branch-anim-3 {
+          animation: drawBranch 0.4s 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .branch-anim-2 {
+          animation: drawBranch 0.35s 0.7s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .branch-anim-1 {
+          animation: drawBranch 0.3s 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+        .flower-pop {
+          animation: flowerPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+          transform-box: fill-box;
+          transform-origin: center;
         }
         .scrubber-range {
           -webkit-appearance: none;
@@ -374,234 +385,168 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
         }
         .scrub-btn:hover { color: #5c5853; }
         .scrub-btn.playing { color: #c97d60; }
-        .ms-label { transition: font-size 0.15s, fill 0.15s; }
       `}</style>
 
-      {/* ── Summary text ─────────────────────────────────────────────────────── */}
+      {/* ── Summary — top center, floats over tree ──────────────────────────── */}
       <div style={{
-        textAlign: 'center', paddingTop: 22, paddingBottom: 2,
-        color: '#8a8580', fontSize: 13, letterSpacing: '0.04em',
+        position: 'absolute', top: 18, left: '50%',
+        transform: 'translateX(-50%)',
+        background: 'rgba(248,245,242,0.9)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        borderRadius: 12,
+        padding: '8px 20px',
+        fontSize: 13,
+        color: '#8a8580',
+        letterSpacing: '0.04em',
+        whiteSpace: 'nowrap',
+        zIndex: 10,
+        pointerEvents: 'none',
       }}>
         {summaryText}
       </div>
 
-      {/* ── Tree SVG — fills viewport ─────────────────────────────────────────── */}
+      {/* ── Tree SVG — fills the viewport ───────────────────────────────────── */}
       <svg
         viewBox={`0 0 ${SVG_W} ${SVG_H}`}
         width="100%"
         height="100vh"
-        preserveAspectRatio="xMidYMid meet"
-        style={{ display: 'block', flex: '1 1 auto' }}
-        onMouseLeave={() => setTooltip(null)}
+        preserveAspectRatio="xMidYMax meet"
+        style={{ display: 'block' }}
       >
-        {/* Ground line */}
-        <line x1={180} y1={TRUNK_BOTTOM+18} x2={620} y2={TRUNK_BOTTOM+18}
-          stroke={BARE_SAND} strokeWidth={1} strokeLinecap="round"/>
+        {/* Warm beige background */}
+        <rect width={SVG_W} height={SVG_H} fill="#f8f5f2" />
 
-        {/* Roots */}
-        {[
-          `M ${TRUNK_X},${TRUNK_BOTTOM+2} C ${TRUNK_X-24},${TRUNK_BOTTOM+22} ${TRUNK_X-64},${TRUNK_BOTTOM+20} ${TRUNK_X-90},${TRUNK_BOTTOM+26}`,
-          `M ${TRUNK_X},${TRUNK_BOTTOM+2} C ${TRUNK_X+24},${TRUNK_BOTTOM+22} ${TRUNK_X+64},${TRUNK_BOTTOM+20} ${TRUNK_X+90},${TRUNK_BOTTOM+26}`,
-          `M ${TRUNK_X-20},${TRUNK_BOTTOM+10} C ${TRUNK_X-40},${TRUNK_BOTTOM+24} ${TRUNK_X-54},${TRUNK_BOTTOM+34} ${TRUNK_X-72},${TRUNK_BOTTOM+36}`,
-          `M ${TRUNK_X+20},${TRUNK_BOTTOM+10} C ${TRUNK_X+40},${TRUNK_BOTTOM+24} ${TRUNK_X+54},${TRUNK_BOTTOM+34} ${TRUNK_X+72},${TRUNK_BOTTOM+36}`,
-        ].map((d, i) => (
-          <path key={i} d={d} stroke={BARE_SAND}
-            strokeWidth={i < 2 ? 1.5 : 1} fill="none" strokeLinecap="round"/>
-        ))}
-
-        {/* Trunk */}
-        <line
-          x1={TRUNK_X} y1={TRUNK_TOP} x2={TRUNK_X} y2={TRUNK_BOTTOM}
-          stroke={BARK} strokeWidth={4} strokeLinecap="round"
-          strokeDasharray={TRUNK_LENGTH} strokeDashoffset={0}
-          style={{ animation: `trunkDraw 1.4s cubic-bezier(0.4,0,0.2,1) forwards` }}
+        {/* Soft ground shadow */}
+        <ellipse
+          cx={SVG_W / 2} cy={SVG_H - 48}
+          rx={140} ry={9}
+          fill="#ddd6cc" opacity={0.5}
         />
 
-        {/* ── Week nodes ──────────────────────────────────────────────────────── */}
-        {nodes.map(({ weekNum, weekLabel, y, stats, pct }) => {
-          const visible     = weekNum <= previewWeek
-          const isCurrent   = weekNum === previewWeek
-          const isMilestone = MILESTONES[weekNum] !== undefined
-          const isHovMs     = hoveredMs === weekNum
+        {/* ── Fractal branches (thickest first) ────────────────────────────── */}
+        {sortedBranches.map((branch, i) => {
+          const isFuture  = branch.weekIndex > displayWeek
+          const isCurrent = branch.weekIndex === displayWeek
 
-          // Determine stage — weeks after previewWeek are forced bare
-          const displayPct   = visible ? pct   : 0
-          const displayTotal = visible ? stats.total : 0
-          const stage        = getStage(displayPct, visible, displayTotal > 0)
-          const br           = stageBranch(stage)
-          const leafCount    = stageLeafCount(stage)
+          const opacity: number = isFuture ? 0.06 : isCurrent ? 0.7 : 1
+          const stroke: string  = isFuture ? '#d4c5b0' : getBranchColor(branch.depth)
+          const sw = getBranchWidth(branch.depth)
 
-          const seed       = weekNum * 137
-          // Branch length scales with task count, but always render ghost branches
-          const branchLen  = Math.round(50 + (Math.max(stats.total, 1) / maxWeekTasks) * 75)
+          const pathD = `M ${branch.x1} ${branch.y1} Q ${branch.cpx} ${branch.cpy} ${branch.x2} ${branch.y2}`
 
-          // Left branch + leaves
-          const lEnd  = { x: TRUNK_X - branchLen, y: y - 5 }
-          const lBr   = branchPath(TRUNK_X, y, lEnd.x, lEnd.y, 'left')
-          const lLeaves = leafCount > 0
-            ? generateLeaves(TRUNK_X, y, lEnd.x, lEnd.y, lBr.cp1x, lBr.cp1y, lBr.cp2x, lBr.cp2y, leafCount, seed)
-            : []
+          // Approximate path length for dash animation
+          const approxLen = Math.round(branch.length * 1.08)
 
-          // Right branch + leaves
-          const rEnd  = { x: TRUNK_X + branchLen, y: y - 5 }
-          const rBr   = branchPath(TRUNK_X, y, rEnd.x, rEnd.y, 'right')
-          const rLeaves = leafCount > 0
-            ? generateLeaves(TRUNK_X, y, rEnd.x, rEnd.y, rBr.cp1x, rBr.cp1y, rBr.cp2x, rBr.cp2y, leafCount, seed + 999)
-            : []
+          const shouldAnimate = mounted && branch.depth >= 8
 
-          // Node fill/stroke
-          const isBloomed = stage === 'bloomed'
-          const nodeFill =
-            isBloomed   ? CORAL :
-            stage === 'lush'    ? GREEN_FULL :
-            stage === 'growing' ? GREEN_BUD  :
-            stage === 'budding' ? BARE_SAND  : 'none'
-          const nodeStroke =
-            isBloomed   ? '#b86b50' :
-            stage === 'lush'    ? '#3d6b3a' :
-            stage === 'growing' ? '#5a8a4a' :
-            stage === 'budding' ? BARK       : BARE_SAND
-          const nodeR = isBloomed ? 9 : 6
-
-          // Glow on current week
-          const glow = isCurrent
-            ? { filter: 'drop-shadow(0 0 6px #c97d60)' } as React.CSSProperties
-            : {}
-
-          const nodeEvents = {
-            onMouseEnter: () => setTooltip({ x: TRUNK_X, y, week: weekLabel, done: stats.done, total: stats.total }),
-            onMouseLeave: () => setTooltip(null),
-            onClick:      () => onOwnerWeekFilter('All', weekLabel),
-          }
+          // For trunk/main branches animate in; stagger by depth
+          const animClass = shouldAnimate
+            ? branch.depth === 9
+              ? 'trunk-anim'
+              : `branch-anim-${branch.depth}`
+            : undefined
 
           return (
-            <g key={weekLabel}>
-              {/* Ghost / live branches — always rendered, opacity drives presence */}
-              <path d={lBr.path} stroke={br.color} strokeWidth={br.width}
-                fill="none" strokeLinecap="round" opacity={br.opacity} className="g-branch"/>
-              <path d={rBr.path} stroke={br.color} strokeWidth={br.width}
-                fill="none" strokeLinecap="round" opacity={br.opacity} className="g-branch"/>
-
-              {/* Leaves */}
-              {[...lLeaves, ...rLeaves].map((leaf, li) => (
-                <ellipse key={li}
-                  cx={leaf.cx} cy={leaf.cy} rx={leaf.rx} ry={leaf.ry}
-                  fill={leafColor(stage, leaf.accent)}
-                  opacity={leaf.accent ? 0.72 : 0.88}
-                  transform={`rotate(${leaf.angle}, ${leaf.cx}, ${leaf.cy})`}
-                  className="g-leaf"
-                  style={{ pointerEvents: 'none' }}
-                />
-              ))}
-
-              {/* Milestone tick mark */}
-              {isMilestone && (
-                <line x1={TRUNK_X-8} y1={y} x2={TRUNK_X+8} y2={y}
-                  stroke={BARK} strokeWidth={2} strokeLinecap="round"/>
-              )}
-
-              {/* Milestone future-hint diamond */}
-              {isMilestone && !isBloomed && (
-                <path d={diamondPath(TRUNK_X, y, 5)}
-                  fill="none" stroke={BARE_SAND} strokeWidth={1} opacity={0.45}
-                  style={{ pointerEvents: 'none' }}/>
-              )}
-
-              {/* Milestone label */}
-              {isMilestone && (
-                <g
-                  onMouseEnter={() => setHoveredMs(weekNum)}
-                  onMouseLeave={() => setHoveredMs(null)}
-                  style={{ cursor: 'default' }}
-                >
-                  <text x={TRUNK_X + 18} y={y + 4} className="ms-label"
-                    style={{
-                      fontSize: isHovMs ? 12 : 11,
-                      fontWeight: 500,
-                      fill: isHovMs ? CORAL : BARK,
-                      fontFamily: "'Inter', system-ui, sans-serif",
-                    }}>
-                    {MILESTONES[weekNum]}
-                  </text>
-                  {isHovMs && WEEK_DATES[`Week ${weekNum}`] && (
-                    <text x={TRUNK_X + 18} y={y + 17}
-                      style={{ fontSize: 9, fill: '#8a8580', fontFamily: "'Inter', system-ui, sans-serif" }}>
-                      {WEEK_DATES[`Week ${weekNum}`]}
-                    </text>
-                  )}
-                </g>
-              )}
-
-              {/* Week number (left of branch end) */}
-              <text
-                x={TRUNK_X - branchLen - 10} y={y + 4}
-                textAnchor="end"
-                style={{ fontSize: 9, fill: '#b0a89e', fontFamily: "'Inter', system-ui, sans-serif", pointerEvents: 'none' }}
-              >
-                W{weekNum}
-              </text>
-
-              {/* Node — flower when milestone bloomed, circle otherwise */}
-              {isBloomed && isMilestone ? (
-                <path d={flowerPath(TRUNK_X, y, 9)} fill={CORAL} stroke="#b86b50" strokeWidth={1}
-                  className="g-node" style={{ cursor: 'pointer', ...glow }} {...nodeEvents}/>
-              ) : (
-                <circle cx={TRUNK_X} cy={y} r={nodeR}
-                  fill={nodeFill} stroke={nodeStroke} strokeWidth={1.5}
-                  className="g-node" style={{ cursor: 'pointer', ...glow }} {...nodeEvents}/>
-              )}
-            </g>
+            <path
+              key={i}
+              d={pathD}
+              stroke={stroke}
+              strokeWidth={sw}
+              strokeLinecap="round"
+              fill="none"
+              opacity={opacity}
+              className={animClass}
+              style={{
+                transition: 'opacity 0.45s ease, stroke 0.45s ease',
+                ...(animClass
+                  ? ({ '--brlen': approxLen, strokeDasharray: approxLen } as React.CSSProperties)
+                  : {}),
+              }}
+            />
           )
         })}
 
-        {/* Tooltip */}
-        {tooltip && <Tooltip data={tooltip}/>}
+        {/* ── Leaves & flowers on shallow branches ─────────────────────────── */}
+        {leafClusters.map(({ branch, leaves, isFlower }, ci) => {
+          const visible = branch.weekIndex <= displayWeek
+          const alpha   = visible ? (branch.weekIndex === displayWeek ? 0.55 : 1) : 0
+
+          if (alpha === 0) return null
+
+          if (isFlower) {
+            return (
+              <g key={`f${ci}`}>
+                {/* Small background leaf cluster */}
+                {leaves.slice(0, 3).map((lf, li) => (
+                  <ellipse
+                    key={li}
+                    cx={lf.cx} cy={lf.cy}
+                    rx={lf.rx * 0.75} ry={lf.ry * 0.75}
+                    fill="#a8c498"
+                    opacity={0.65 * alpha}
+                    transform={`rotate(${lf.rotation}, ${lf.cx}, ${lf.cy})`}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                ))}
+                {/* 5-petal coral flower */}
+                <polygon
+                  points={flowerPoints(branch.x2, branch.y2, 6)}
+                  fill="#c97d60"
+                  opacity={0.9 * alpha}
+                  className={visible && branch.weekIndex === displayWeek ? 'flower-pop' : undefined}
+                  style={{ pointerEvents: 'none' }}
+                />
+                {/* Tiny center dot */}
+                <circle
+                  cx={branch.x2} cy={branch.y2} r={1.5}
+                  fill="#f0e0d0"
+                  opacity={alpha}
+                  style={{ pointerEvents: 'none' }}
+                />
+              </g>
+            )
+          }
+
+          return (
+            <g key={`l${ci}`}>
+              {leaves.map((lf, li) => (
+                <ellipse
+                  key={li}
+                  cx={lf.cx} cy={lf.cy}
+                  rx={lf.rx} ry={lf.ry}
+                  fill={lf.color}
+                  opacity={0.82 * alpha}
+                  transform={`rotate(${lf.rotation}, ${lf.cx}, ${lf.cy})`}
+                  style={{
+                    pointerEvents: 'none',
+                    transition: 'opacity 0.4s ease',
+                  }}
+                />
+              ))}
+            </g>
+          )
+        })}
       </svg>
 
-      {/* ── Legend ───────────────────────────────────────────────────────────── */}
+      {/* ── Time Scrubber — fixed bottom center, floats over tree ──────────── */}
       <div style={{
-        display: 'flex', gap: 20, justifyContent: 'center',
-        paddingTop: 8, paddingBottom: 100,
-        fontSize: 11, color: '#8a8580', alignItems: 'center',
-      }}>
-        {[
-          { fill: 'none', stroke: BARE_SAND, label: 'Upcoming' },
-          { fill: GREEN_BUD,  stroke: 'none', label: 'In progress' },
-          { fill: GREEN_FULL, stroke: 'none', label: 'Lush' },
-          { fill: CORAL,      stroke: 'none', label: 'Complete' },
-        ].map(({ fill, stroke, label }) => (
-          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <svg width={12} height={12}>
-              <circle cx={6} cy={6} r={5} fill={fill} stroke={stroke} strokeWidth={fill === 'none' ? 1.5 : 0}/>
-            </svg>
-            {label}
-          </span>
-        ))}
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width={12} height={12}>
-            <path d={diamondPath(6, 6, 4)} fill="none" stroke={BARE_SAND} strokeWidth={1}/>
-          </svg>
-          Milestone ahead
-        </span>
-      </div>
-
-      <div style={{ textAlign: 'center', paddingBottom: 6, fontSize: 11, color: '#b0a89e' }}>
-        Click any node to filter board view
-      </div>
-
-      {/* ── Time Scrubber — fixed at bottom ──────────────────────────────────── */}
-      <div style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0,
-        background: 'rgba(248,245,242,0.97)',
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        borderTop: '1px solid #e2d9d0',
-        padding: '10px 28px 16px',
+        position: 'absolute',
+        bottom: 20,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 'min(580px, 90vw)',
+        background: 'rgba(248,245,242,0.9)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        borderRadius: 16,
+        padding: '12px 24px',
         zIndex: 50,
+        boxShadow: '0 2px 24px rgba(0,0,0,0.08)',
       }}>
         {/* Label row */}
         <div style={{
-          textAlign: 'center', marginBottom: 7, minHeight: 20,
+          textAlign: 'center', marginBottom: 8, minHeight: 18,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
         }}>
           {isDragging && (
@@ -612,13 +557,18 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
           <span style={{ fontSize: 12, fontWeight: 500, color: '#5c5853' }}>
             Week {previewWeek}{currentDateRange ? ` · ${currentDateRange}` : ''}
           </span>
+          {currentWeekStats.total > 0 && (
+            <span style={{ fontSize: 11, color: '#b0a89e' }}>
+              {currentWeekStats.done}/{currentWeekStats.total} done
+            </span>
+          )}
           {previewWeek === actualWeek && !isDragging && !isPlaying && (
             <span style={{ fontSize: 10, color: '#b0a89e', fontStyle: 'italic' }}>current</span>
           )}
         </div>
 
         {/* Slider */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: 600, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 11, color: '#b0a89e', whiteSpace: 'nowrap' }}>Week 1</span>
           <input
             type="range" min={1} max={12} value={previewWeek}
@@ -637,6 +587,13 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
             {isPlaying ? '■ Stop' : '▶ Play'}
           </button>
           <button className="scrub-btn" onClick={handleReset}>⏮ Reset</button>
+          <button
+            className="scrub-btn"
+            onClick={() => onOwnerWeekFilter('All', `Week ${previewWeek}`)}
+            style={{ color: '#c97d60', fontWeight: 500 }}
+          >
+            View tasks →
+          </button>
         </div>
       </div>
     </div>
