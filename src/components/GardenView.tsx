@@ -78,13 +78,13 @@ function getBranchWidth(depth: number): number {
   return map[depth] ?? 0.6
 }
 
-// ── Active branch color (warm bark → green twigs) ─────────────────────────────
+// ── Active branch color — ink brushstroke palette ─────────────────────────────
 function getActiveBranchColor(depth: number): string {
-  if (depth >= 8) return '#7a5c3a'   // warm trunk bark
-  if (depth >= 6) return '#6a7a4a'   // bark transitioning to green
-  if (depth >= 4) return '#4a7a3a'   // green-brown mid branch
-  if (depth >= 2) return '#3a8a4a'   // green twig
-  return '#4a9a50'                   // bright green tip
+  if (depth >= 8) return '#4a3a2a'   // deep ink trunk — dark sumi
+  if (depth >= 6) return '#3a4a32'   // dark ink, hint of forest
+  if (depth >= 4) return '#304030'   // dark grey-green
+  if (depth >= 2) return '#2e4a34'   // deep green-black twig
+  return '#3a5a40'                   // dark green tip
 }
 
 // ── Current week from program start date ──────────────────────────────────────
@@ -101,22 +101,24 @@ interface Leaf {
   cx: number; cy: number
   rx: number; ry: number
   rotation: number
-  colorIdx: number  // 0-2 index into leaf color array
+  colorIdx: number
 }
 
-const LEAF_COLORS = ['#3a8a4a', '#4a9e5c', '#52a870', '#2e7a42', '#5ab86a']
+// Muted ink-wash greens — no neon
+const LEAF_COLORS = ['#3a6a42', '#2e5c38', '#4a7a52', '#3d6645', '#527a5a']
 
 function generateLeafCluster(branch: Branch, rand: SeededRandom): Leaf[] {
-  const count = 4 + Math.floor(rand.next() * 6)  // 4-9 per tip
+  // Sparse — 2-4 leaves per tip, small, delicate
+  const count = 2 + Math.floor(rand.next() * 3)
   const leaves: Leaf[] = []
   for (let i = 0; i < count; i++) {
-    const spread = rand.next() * 80 - 40
-    const dist = rand.next() * 18 + 4
+    const spread = rand.next() * 60 - 30
+    const dist = rand.next() * 10 + 3
     const leafRad = ((branch.angle + spread) * Math.PI) / 180
     const cx = branch.x2 + Math.cos(leafRad) * dist
     const cy = branch.y2 - Math.sin(leafRad) * dist
-    const rx = 9 + rand.next() * 7
-    const ry = 4 + rand.next() * 4
+    const rx = 5 + rand.next() * 5   // small: 5-10px
+    const ry = 2 + rand.next() * 3   // thin: 2-5px
     const rotation = rand.next() * 360
     const colorIdx = Math.floor(rand.next() * LEAF_COLORS.length)
     leaves.push({ cx, cy, rx, ry, rotation, colorIdx })
@@ -401,33 +403,25 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
         style={{ display: 'block' }}
       >
         <defs>
-          {/* Soft glow filter for active branches */}
-          <filter id="branchGlow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="2.5" result="blur" />
+          {/* Subtle ink-bleed for active branches */}
+          <filter id="branchGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.2" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
-          {/* Stronger glow for current-week branches */}
-          <filter id="branchGlowStrong" x="-50%" y="-50%" width="200%" height="200%">
+          {/* Slightly stronger for current-week tip branches */}
+          <filter id="branchGlowStrong" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          {/* Flower glow — coral accent only */}
+          <filter id="flowerGlow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          {/* Leaf glow */}
-          <filter id="leafGlow" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          {/* Flower glow */}
-          <filter id="flowerGlow" x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur stdDeviation="5" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -543,14 +537,14 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
           }
 
           return (
-            <g key={`l${ci}`} filter="url(#leafGlow)">
+            <g key={`l${ci}`}>
               {leaves.map((lf, li) => (
                 <ellipse
                   key={li}
                   cx={lf.cx} cy={lf.cy}
                   rx={lf.rx} ry={lf.ry}
                   fill={LEAF_COLORS[lf.colorIdx]}
-                  opacity={0.78 * baseAlpha}
+                  opacity={0.55 * baseAlpha}
                   transform={`rotate(${lf.rotation}, ${lf.cx}, ${lf.cy})`}
                   className={isCurrent ? 'leaf-bloom' : undefined}
                   style={{
