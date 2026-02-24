@@ -234,7 +234,7 @@ function App() {
                 className={view === 'garden' ? 'active' : ''}
                 onClick={() => setView('garden')}
               >
-                Garden
+                Grow
               </button>
             </div>
 
