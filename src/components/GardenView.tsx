@@ -30,14 +30,31 @@ const MILESTONES: Record<number, string> = {
   12: 'Full season',
 }
 
+// ── Accomplishment labels per week ────────────────────────────────────────────
+const WEEK_LABELS: Record<number, string[]> = {
+  1:  ['Website designed', 'Domain live'],
+  2:  ['Booking system set up', 'Guide contract drafted'],
+  3:  ['Payments ready', 'Legal done'],
+  4:  ['WhatsApp automation', 'Content calendar'],
+  5:  ['Bokun integrated', 'Pricing final'],
+  6:  ['Booking page live', 'First signups'],
+  7:  ['SEO content out', 'Partnerships'],
+  8:  ['Founding foragers invited', 'Pre-launch done'],
+  9:  ['Apr 6 — class 1', 'Apr 13 — class 2', 'Apr 20 — class 3'],
+  10: ['Apr 24 — first paid', 'Feedback in'],
+  11: ['Operations smooth', 'Reviews growing'],
+  12: ['Full season live', 'Revenue flowing'],
+}
+
 // ── Star ───────────────────────────────────────────────────────────────────────
 interface Star {
   x: number
   y: number
-  r: number       // 1–3.5
-  week: number    // 1–12
+  r: number
+  week: number
   isMilestone: boolean
-  labelAnchor?: 'left' | 'right' | 'above' | 'below'
+  label?: string
+  labelAnchor: 'left' | 'right'
 }
 
 // ── Connection ─────────────────────────────────────────────────────────────────
@@ -58,29 +75,25 @@ function buildConstellation(): { stars: Star[]; connections: Connection[] } {
 
   for (let w = 1; w <= 12; w++) {
     const isMilestoneWeek = w in MILESTONES
+    const weekLabels = [...(WEEK_LABELS[w] || [])]
+    const labelSlots = [1, 4, 7]  // which star indices get a label
 
     for (let i = 0; i < STARS_PER_WEEK; i++) {
-      // Spread from bottom (w=1) to top (w=12), with generous horizontal range
-      const t = (w - 1) / 11   // 0 → 1 (bottom to top)
-      const yBase = H * 0.88 - t * H * 0.76
-      const xBase = W * 0.12 + rand.next() * W * 0.76
+      const t       = (w - 1) / 11
+      const yBase   = H * 0.88 - t * H * 0.76
+      const xBase   = W * 0.12 + rand.next() * W * 0.76
       const yJitter = (rand.next() - 0.5) * H * 0.14
+      const x = Math.round(xBase)
+      const y = Math.round(Math.max(30, Math.min(H - 20, yBase + yJitter)))
 
-      // One star per milestone week is the "anchor star" — slightly special
       const isMilestone = isMilestoneWeek && i === 0
+      const r = isMilestone ? 2.8 + rand.next() * 0.8 : 0.8 + rand.next() * 2.2
 
-      const r = isMilestone
-        ? 2.8 + rand.next() * 0.8
-        : 0.8 + rand.next() * 2.2
+      const slotIdx = labelSlots.indexOf(i)
+      const label   = slotIdx !== -1 ? weekLabels[slotIdx] : undefined
+      const anchor: 'left' | 'right' = x > W / 2 ? 'left' : 'right'
 
-      stars.push({
-        x: Math.round(xBase),
-        y: Math.round(Math.max(30, Math.min(H - 20, yBase + yJitter))),
-        r,
-        week: w,
-        isMilestone,
-        labelAnchor: rand.next() > 0.5 ? 'right' : 'left',
-      })
+      stars.push({ x, y, r, week: w, isMilestone, label, labelAnchor: anchor })
     }
   }
 
@@ -418,20 +431,40 @@ export function GardenView({ tasks, onOwnerWeekFilter }: Props) {
             ? (isCurrent ? '#e8c090' : '#c8a878')
             : (isCurrent ? '#dde4f0' : '#aab4cc')
 
-          const opacity = isCurrent ? 1 : 0.75
-          const filter = star.isMilestone ? 'url(#milestoneGlow)' : 'url(#starGlow)'
+          const age        = displayWeek - star.week
+          const opacity    = isCurrent ? 1 : Math.max(0.4, 0.85 - age * 0.04)
+          const filter     = star.isMilestone ? 'url(#milestoneGlow)' : 'url(#starGlow)'
+          const labelOffX  = star.labelAnchor === 'right' ? star.r + 7 : -(star.r + 7)
+          const textAnchor = star.labelAnchor === 'right' ? 'start' : 'end'
+          const labelAlpha = isCurrent ? 0.9 : Math.max(0.15, 0.6 - age * 0.05)
 
           return (
-            <circle
-              key={`star${i}`}
-              cx={star.x} cy={star.y}
-              r={star.r}
-              fill={fill}
-              opacity={opacity}
-              filter={filter}
-              className={isCurrent && mounted ? 'star-enter' : undefined}
-              style={{ transition: 'opacity 0.4s ease' }}
-            />
+            <g key={`star${i}`}>
+              <circle
+                cx={star.x} cy={star.y}
+                r={star.r}
+                fill={fill}
+                opacity={opacity}
+                filter={filter}
+                className={isCurrent && mounted ? 'star-enter' : undefined}
+                style={{ transition: 'opacity 0.4s ease' }}
+              />
+              {star.label && (
+                <text
+                  x={star.x + labelOffX}
+                  y={star.y + 4}
+                  fill={`rgba(180,190,225,${labelAlpha})`}
+                  fontSize={10}
+                  fontFamily="'Inter', system-ui, sans-serif"
+                  letterSpacing="0.03em"
+                  textAnchor={textAnchor}
+                  className={isCurrent && mounted ? 'milestone-label' : undefined}
+                  style={{ userSelect: 'none', pointerEvents: 'none' }}
+                >
+                  {star.label}
+                </text>
+              )}
+            </g>
           )
         })}
 
