@@ -126,8 +126,8 @@ export function TaskModal({ task, open, onClose, onSave, onDelete }: Props) {
         </Form.Item>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Form.Item name="owner" label={<MetaLabel>Owner</MetaLabel>}>
-            <Select placeholder="Assign to..." allowClear>
+          <Form.Item name="owner" label={<MetaLabel>Owner</MetaLabel>} rules={[{ required: true, message: 'Please assign an owner' }]}>
+            <Select placeholder="Assign to...">
               {OWNERS.map((o) => (
                 <Select.Option key={o} value={o}>
                   <span
@@ -184,8 +184,8 @@ export function TaskModal({ task, open, onClose, onSave, onDelete }: Props) {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Form.Item name="week" label={<MetaLabel>Week</MetaLabel>}>
-            <Select placeholder="Week..." allowClear>
+          <Form.Item name="week" label={<MetaLabel>Week</MetaLabel>} rules={[{ required: true, message: 'Please select a week' }]}>
+            <Select placeholder="Week...">
               {WEEK_OPTIONS.map((w) => (
                 <Select.Option key={w} value={w}>{w}</Select.Option>
               ))}

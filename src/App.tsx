@@ -32,9 +32,19 @@ function App() {
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [view, setView] = useState<AppView>('board')
 
+  // Compute current week based on program start date (Feb 24, 2026)
+  function getCurrentWeek(): string {
+    const programStart = new Date('2026-02-24')
+    const now = new Date()
+    const diffMs = now.getTime() - programStart.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    const weekNum = Math.min(Math.max(Math.floor(diffDays / 7) + 1, 1), 12)
+    return `Week ${weekNum}`
+  }
+
   // Filters
   const [ownerFilter, setOwnerFilter] = useState<string>('All')
-  const [weekFilter, setWeekFilter] = useState<string>('Week 1')
+  const [weekFilter, setWeekFilter] = useState<string>(getCurrentWeek())
   const [monthFilter, setMonthFilter] = useState<string>('All')
 
   const [messageApi, contextHolder] = message.useMessage()
